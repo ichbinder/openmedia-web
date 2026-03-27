@@ -3,6 +3,7 @@ export function Footer() {
     <footer className="border-t border-border/40 bg-background/60">
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-2 px-4 py-6 text-center text-sm text-muted-foreground sm:px-6 lg:px-8">
         <p>
+{/* tmdb attribution required by API terms */}
           Filmdaten bereitgestellt von{" "}
           <a
             href="https://www.themoviedb.org/"
