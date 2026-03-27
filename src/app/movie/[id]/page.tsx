@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getMovieDetails } from "@/lib/tmdb";
 import { MovieDetailHero } from "@/components/movie/movie-detail-hero";
+import { CastList } from "@/components/movie/cast-list";
+import { TrailerSection } from "@/components/movie/trailer-section";
+import { MovieGrid } from "@/components/movie/movie-grid";
 import { AlertTriangle } from "lucide-react";
 
 interface MoviePageProps {
@@ -57,10 +60,9 @@ export default async function MovieDetailPage({ params }: MoviePageProps) {
   return (
     <main>
       <MovieDetailHero movie={movie} />
-
-      {/* T02: Cast section */}
-      {/* T02: Trailer section */}
-      {/* T02: Similar movies section */}
+      <CastList cast={movie.credits.cast} />
+      <TrailerSection videos={movie.videos.results} />
+      <MovieGrid movies={movie.similar.results} heading="Ähnliche Filme" />
     </main>
   );
 }
