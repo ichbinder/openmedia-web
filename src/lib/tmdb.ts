@@ -30,6 +30,23 @@ export interface TrendingResponse {
   total_results: number;
 }
 
+export interface Genre {
+  id: number;
+  name: string;
+}
+
+export interface GenreListResponse {
+  genres: Genre[];
+}
+
+/** Paginated search / discover response — same shape as TrendingResponse. */
+export interface SearchResponse {
+  page: number;
+  results: Movie[];
+  total_pages: number;
+  total_results: number;
+}
+
 // ---------------------------------------------------------------------------
 // Fetch wrapper
 // ---------------------------------------------------------------------------
@@ -78,6 +95,44 @@ async function tmdbFetch<T>(
 export async function getTrendingMovies(): Promise<Movie[]> {
   const data = await tmdbFetch<TrendingResponse>("trending/movie/week");
   return data.results;
+}
+
+/**
+ * Search movies by title.
+ * Returns an empty results set without hitting the API when `query` is blank.
+ */
+export async function searchMovies(
+  query: string,
+  page: number = 1,
+): Promise<SearchResponse> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { page: 1, results: [], total_pages: 0, total_results: 0 };
+  }
+  return tmdbFetch<SearchResponse>("search/movie", {
+    query: trimmed,
+    page: String(page),
+  });
+}
+
+/** Fetch the full list of movie genres. */
+export async function getGenres(): Promise<Genre[]> {
+  const data = await tmdbFetch<GenreListResponse>("genre/movie/list");
+  return data.genres;
+}
+
+/**
+ * Discover movies by genre, sorted by popularity (descending).
+ */
+export async function discoverMoviesByGenre(
+  genreId: number,
+  page: number = 1,
+): Promise<SearchResponse> {
+  return tmdbFetch<SearchResponse>("discover/movie", {
+    with_genres: String(genreId),
+    sort_by: "popularity.desc",
+    page: String(page),
+  });
 }
 
 // ---------------------------------------------------------------------------
