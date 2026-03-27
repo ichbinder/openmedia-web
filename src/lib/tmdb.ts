@@ -47,6 +47,36 @@ export interface SearchResponse {
   total_results: number;
 }
 
+export interface CastMember {
+  id: number;
+  name: string;
+  character: string;
+  profile_path: string | null;
+  order: number;
+}
+
+export interface Video {
+  id: string;
+  key: string;
+  name: string;
+  site: string;
+  type: string;
+  official: boolean;
+}
+
+export interface MovieDetail extends Movie {
+  runtime: number | null;
+  tagline: string | null;
+  genres: Genre[];
+  production_companies: { id: number; name: string; logo_path: string | null }[];
+  status: string;
+  budget: number;
+  revenue: number;
+  credits: { cast: CastMember[] };
+  videos: { results: Video[] };
+  similar: { results: Movie[] };
+}
+
 // ---------------------------------------------------------------------------
 // Fetch wrapper
 // ---------------------------------------------------------------------------
@@ -135,6 +165,16 @@ export async function discoverMoviesByGenre(
   });
 }
 
+/**
+ * Fetch full movie details including credits, videos, and similar movies.
+ * Uses `append_to_response` to combine four requests into a single API call.
+ */
+export async function getMovieDetails(id: number): Promise<MovieDetail> {
+  return tmdbFetch<MovieDetail>(`movie/${id}`, {
+    append_to_response: "credits,videos,similar",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Image helpers
 // ---------------------------------------------------------------------------
@@ -158,6 +198,18 @@ export function getPosterUrl(
 export function getBackdropUrl(
   path: string | null,
   size: string = "w1280",
+): string | null {
+  if (!path) return null;
+  return `${TMDB_IMAGE_BASE}/${size}${path}`;
+}
+
+/**
+ * Build a full profile image URL (cast/crew photos).
+ * Returns `null` when the person has no profile image.
+ */
+export function getProfileUrl(
+  path: string | null,
+  size: string = "w185",
 ): string | null {
   if (!path) return null;
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
