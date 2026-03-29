@@ -2,14 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useDownloads, type DownloadItem } from "@/contexts/download-context";
+import { useDownloads, type ProvisionItem } from "@/contexts/download-context";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { getPosterUrl } from "@/lib/tmdb";
 import { Library, Play, Trash2, Film, Star } from "lucide-react";
-import { cn } from "@/lib/utils";
 
-function LibraryCard({ item }: { item: DownloadItem }) {
-  const { removeDownload } = useDownloads();
+function LibraryCard({ item }: { item: ProvisionItem }) {
+  const { removeProvision } = useDownloads();
   const posterUrl = item.posterPath
     ? getPosterUrl(item.posterPath, "w342")
     : null;
@@ -61,7 +60,7 @@ function LibraryCard({ item }: { item: DownloadItem }) {
             {year && <span>{year}</span>}
           </div>
           <button
-            onClick={() => removeDownload(item.movieId)}
+            onClick={() => removeProvision(item.movieId)}
             className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             aria-label={`${item.title} löschen`}
           >
@@ -74,15 +73,15 @@ function LibraryCard({ item }: { item: DownloadItem }) {
 }
 
 function LibraryContent() {
-  const { completedItems } = useDownloads();
+  const { readyItems } = useDownloads();
 
-  if (completedItems.length === 0) {
+  if (readyItems.length === 0) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
         <Library className="size-12 text-muted-foreground" />
         <h2 className="text-xl font-semibold">Deine Bibliothek ist leer</h2>
         <p className="max-w-md text-sm text-muted-foreground">
-          Lade Filme über die Detailseite herunter — fertige Downloads erscheinen
+          Stelle Filme über die Detailseite bereit — fertige Filme erscheinen
           hier in deiner persönlichen Bibliothek.
         </p>
       </div>
@@ -95,11 +94,11 @@ function LibraryContent() {
         Meine Bibliothek
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        {completedItems.length}{" "}
-        {completedItems.length === 1 ? "Film" : "Filme"} heruntergeladen
+        {readyItems.length}{" "}
+        {readyItems.length === 1 ? "Film" : "Filme"} bereitgestellt
       </p>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {completedItems.map((item) => (
+        {readyItems.map((item) => (
           <LibraryCard key={item.movieId} item={item} />
         ))}
       </div>

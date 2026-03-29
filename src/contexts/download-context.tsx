@@ -11,37 +11,64 @@ import {
 } from "react";
 import { useAuth } from "@/contexts/auth-context";
 
-export type DownloadStatus = "queued" | "downloading" | "completed" | "failed";
+/**
+ * Source: how the film is being provisioned
+ * - "usenet": Film exists in Usenet, straightforward download + unpack
+ * - "search": Film not in Usenet, requires external search + download + upload to Usenet as backup
+ */
+export type ProvisionSource = "usenet" | "search";
 
-export interface DownloadItem {
+/**
+ * Provisioning status — the stages a film goes through before it's ready:
+ *
+ * For Usenet source:
+ *   queued → downloading → unpacking → ready
+ *
+ * For Search source:
+ *   queued → searching → downloading → unpacking → uploading_backup → ready
+ *
+ * Either path can end in "failed"
+ */
+export type ProvisionStatus =
+  | "queued"
+  | "searching"       // search source only: looking for the film
+  | "downloading"     // downloading from Usenet or external source
+  | "unpacking"       // extracting/preparing the film
+  | "uploading_backup" // search source only: uploading to Usenet as backup
+  | "ready"           // film on server, available for stream/download
+  | "failed";
+
+export interface ProvisionItem {
   movieId: number;
   title: string;
   posterPath: string | null;
   voteAverage: number;
   releaseDate: string;
-  status: DownloadStatus;
-  progress: number; // 0-100
+  source: ProvisionSource;
+  status: ProvisionStatus;
+  progress: number; // 0-100 overall progress
   startedAt: string;
   completedAt: string | null;
 }
 
 interface DownloadContextValue {
-  items: DownloadItem[];
-  startDownload: (movie: Omit<DownloadItem, "status" | "progress" | "startedAt" | "completedAt">) => void;
-  cancelDownload: (movieId: number) => void;
-  removeDownload: (movieId: number) => void;
-  getDownload: (movieId: number) => DownloadItem | undefined;
+  items: ProvisionItem[];
+  provisionMovie: (movie: Omit<ProvisionItem, "status" | "progress" | "startedAt" | "completedAt">) => void;
+  cancelProvision: (movieId: number) => void;
+  removeProvision: (movieId: number) => void;
+  getProvision: (movieId: number) => ProvisionItem | undefined;
   activeCount: number;
-  completedItems: DownloadItem[];
+  readyItems: ProvisionItem[];
+  isUsenetAvailable: (movieId: number) => boolean;
 }
 
 const DownloadContext = createContext<DownloadContextValue | null>(null);
 
 function getStorageKey(userId: string) {
-  return `cinescope_downloads_${userId}`;
+  return `cinescope_provisions_${userId}`;
 }
 
-function loadDownloads(userId: string): DownloadItem[] {
+function loadProvisions(userId: string): ProvisionItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(getStorageKey(userId));
@@ -51,33 +78,78 @@ function loadDownloads(userId: string): DownloadItem[] {
   }
 }
 
-function saveDownloads(userId: string, items: DownloadItem[]) {
+function saveProvisions(userId: string, items: ProvisionItem[]) {
   localStorage.setItem(getStorageKey(userId), JSON.stringify(items));
 }
 
-// Simulated download speed: ~10% per second → ~10s total
+/**
+ * Mock Usenet availability: deterministic based on movieId.
+ * ~30% of movies are "in Usenet". Uses a simple hash so the same
+ * movie always returns the same result within a session.
+ */
+function mockUsenetAvailable(movieId: number): boolean {
+  // Simple deterministic hash — same movieId always gives same result
+  const hash = ((movieId * 2654435761) >>> 0) % 100;
+  return hash < 30; // 30% chance
+}
+
+// Simulation timing
 const TICK_INTERVAL_MS = 500;
-const PROGRESS_PER_TICK = 5;
+
+// Progress stages for each source type
+// Usenet: download (60%) → unpack (40%) = 100%
+// Search: search (20%) → download (40%) → unpack (20%) → upload backup (20%) = 100%
+function getNextState(item: ProvisionItem): { status: ProvisionStatus; progress: number } {
+  const p = item.progress;
+
+  if (item.source === "usenet") {
+    // Usenet path: ~10s total (5% per tick)
+    const next = Math.min(p + 5, 100);
+    if (next < 60) return { status: "downloading", progress: next };
+    if (next < 100) return { status: "unpacking", progress: next };
+    return { status: "ready", progress: 100 };
+  }
+
+  // Search path: ~20s total (2.5% per tick)
+  const next = Math.min(p + 2.5, 100);
+  if (next < 20) return { status: "searching", progress: next };
+  if (next < 60) return { status: "downloading", progress: next };
+  if (next < 80) return { status: "unpacking", progress: next };
+  if (next < 100) return { status: "uploading_backup", progress: next };
+  return { status: "ready", progress: 100 };
+}
+
+function getStatusLabel(status: ProvisionStatus, source: ProvisionSource): string {
+  switch (status) {
+    case "queued": return "Wartend…";
+    case "searching": return "Film wird gesucht…";
+    case "downloading": return source === "usenet" ? "Lade aus Usenet…" : "Wird heruntergeladen…";
+    case "unpacking": return "Wird entpackt…";
+    case "uploading_backup": return "Backup ins Usenet…";
+    case "ready": return "Bereit";
+    case "failed": return "Fehlgeschlagen";
+  }
+}
+
+export { getStatusLabel };
 
 export function DownloadProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [items, setItems] = useState<DownloadItem[]>([]);
+  const [items, setItems] = useState<ProvisionItem[]>([]);
   const userIdRef = useRef<string | null>(null);
 
-  // Load downloads when user changes
   useEffect(() => {
     if (user) {
       userIdRef.current = user.id;
-      setItems(loadDownloads(user.id));
+      setItems(loadProvisions(user.id));
     } else {
       userIdRef.current = null;
       setItems([]);
     }
   }, [user]);
 
-  // Single global timer that ticks all active downloads
   const hasActive = items.some(
-    (d) => d.status === "downloading" || d.status === "queued"
+    (d) => d.status !== "ready" && d.status !== "failed"
   );
 
   useEffect(() => {
@@ -87,26 +159,19 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       setItems((prev) => {
         let changed = false;
         const next = prev.map((d) => {
-          if (d.status !== "downloading" && d.status !== "queued") return d;
+          if (d.status === "ready" || d.status === "failed") return d;
           changed = true;
-          const newProgress = Math.min(d.progress + PROGRESS_PER_TICK, 100);
-          if (newProgress >= 100) {
-            return {
-              ...d,
-              status: "completed" as const,
-              progress: 100,
-              completedAt: new Date().toISOString(),
-            };
-          }
+          const { status, progress } = getNextState(d);
           return {
             ...d,
-            status: "downloading" as const,
-            progress: newProgress,
+            status,
+            progress,
+            completedAt: status === "ready" ? new Date().toISOString() : null,
           };
         });
         if (!changed) return prev;
         if (userIdRef.current) {
-          saveDownloads(userIdRef.current, next);
+          saveProvisions(userIdRef.current, next);
         }
         return next;
       });
@@ -115,18 +180,17 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [hasActive]);
 
-  // Persist on change (for non-timer changes like add/remove)
   useEffect(() => {
     if (userIdRef.current && items.length >= 0) {
-      saveDownloads(userIdRef.current, items);
+      saveProvisions(userIdRef.current, items);
     }
   }, [items]);
 
-  const startDownload = useCallback(
-    (movie: Omit<DownloadItem, "status" | "progress" | "startedAt" | "completedAt">) => {
+  const provisionMovie = useCallback(
+    (movie: Omit<ProvisionItem, "status" | "progress" | "startedAt" | "completedAt">) => {
       if (!user) return;
       setItems((prev) => {
-        if (prev.some((d) => d.movieId === movie.movieId && (d.status === "downloading" || d.status === "queued"))) {
+        if (prev.some((d) => d.movieId === movie.movieId && d.status !== "ready" && d.status !== "failed")) {
           return prev;
         }
         const filtered = prev.filter((d) => d.movieId !== movie.movieId);
@@ -145,12 +209,12 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
-  const cancelDownload = useCallback(
+  const cancelProvision = useCallback(
     (movieId: number) => {
       if (!user) return;
       setItems((prev) =>
         prev.map((d) =>
-          d.movieId === movieId && (d.status === "downloading" || d.status === "queued")
+          d.movieId === movieId && d.status !== "ready" && d.status !== "failed"
             ? { ...d, status: "failed" as const }
             : d
         )
@@ -159,7 +223,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
-  const removeDownload = useCallback(
+  const removeProvision = useCallback(
     (movieId: number) => {
       if (!user) return;
       setItems((prev) => prev.filter((d) => d.movieId !== movieId));
@@ -167,27 +231,33 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
-  const getDownload = useCallback(
+  const getProvision = useCallback(
     (movieId: number) => items.find((d) => d.movieId === movieId),
     [items]
   );
 
+  const isUsenetAvailable = useCallback(
+    (movieId: number) => mockUsenetAvailable(movieId),
+    []
+  );
+
   const activeCount = items.filter(
-    (d) => d.status === "downloading" || d.status === "queued"
+    (d) => d.status !== "ready" && d.status !== "failed"
   ).length;
 
-  const completedItems = items.filter((d) => d.status === "completed");
+  const readyItems = items.filter((d) => d.status === "ready");
 
   return (
     <DownloadContext.Provider
       value={{
         items,
-        startDownload,
-        cancelDownload,
-        removeDownload,
-        getDownload,
+        provisionMovie,
+        cancelProvision,
+        removeProvision,
+        getProvision,
         activeCount,
-        completedItems,
+        readyItems,
+        isUsenetAvailable,
       }}
     >
       {children}
