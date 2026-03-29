@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "0ac04562",
+    "label": "next-dev",
+    "command": "cd /Users/jakob/git/movie-test-02 && npm run dev",
+    "cwd": "/Users/jakob/git/movie-test-02",
+    "ownerSessionFile": "/Users/jakob/.gsd/sessions/--Users-jakob-git-movie-test-02--/2026-03-27T20-01-20-280Z_5385e56c-5451-41a8-8573-b7c0346ab919.jsonl",
+    "persistAcrossSessions": false,
+    "startedAt": 1774688928905,
+    "processType": "server",
+    "group": null,
+    "readyPattern": null,
+    "readyPort": 3000,
+    "pid": 9754
+  }
+]

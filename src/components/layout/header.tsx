@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, Film } from "lucide-react";
+import { Menu, Film, LogIn, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -12,15 +12,20 @@ import {
   SheetTitle,
   SheetClose,
 } from "@/components/ui/sheet";
+import { useAuth } from "@/contexts/auth-context";
 
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/search", label: "Suche" },
   { href: "/genres", label: "Genres" },
+  { href: "/watchlist", label: "Watchlist" },
+  { href: "/downloads", label: "Downloads" },
+  { href: "/bibliothek", label: "Bibliothek" },
 ] as const;
 
 export function Header() {
   const [open, setOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/40 bg-background/80 backdrop-blur-md">
@@ -45,6 +50,32 @@ export function Header() {
               {link.label}
             </Link>
           ))}
+          <div className="ml-2 border-l border-border/40 pl-2">
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <User className="size-4" />
+                  {user.name}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={logout}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <LogOut className="size-4" />
+                </Button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-cinema-gold transition-colors hover:text-cinema-gold/80"
+              >
+                <LogIn className="size-4" />
+                Anmelden
+              </Link>
+            )}
+          </div>
         </nav>
 
         {/* Mobile hamburger */}
@@ -78,6 +109,39 @@ export function Header() {
                   </Link>
                 </SheetClose>
               ))}
+              <div className="mt-2 border-t border-border/40 pt-2">
+                {user ? (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+                      <User className="size-4" />
+                      {user.name}
+                    </div>
+                    <SheetClose render={<span />}>
+                      <button
+                        onClick={() => {
+                          logout();
+                          setOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-base font-medium text-foreground transition-colors hover:bg-muted"
+                      >
+                        <LogOut className="size-4" />
+                        Abmelden
+                      </button>
+                    </SheetClose>
+                  </>
+                ) : (
+                  <SheetClose render={<span />}>
+                    <Link
+                      href="/login"
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-2 rounded-md px-3 py-2.5 text-base font-medium text-cinema-gold transition-colors hover:bg-muted"
+                    >
+                      <LogIn className="size-4" />
+                      Anmelden
+                    </Link>
+                  </SheetClose>
+                )}
+              </div>
             </nav>
           </SheetContent>
         </Sheet>

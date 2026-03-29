@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getMovieDetails } from "@/lib/tmdb";
 import { MovieDetailHero } from "@/components/movie/movie-detail-hero";
+import { MovieActions } from "@/components/movie/movie-actions";
 import { CastList } from "@/components/movie/cast-list";
 import { TrailerSection } from "@/components/movie/trailer-section";
 import { MovieGrid } from "@/components/movie/movie-grid";
@@ -60,6 +61,15 @@ export default async function MovieDetailPage({ params }: MoviePageProps) {
   return (
     <main>
       <MovieDetailHero movie={movie} />
+      <MovieActions
+        movie={{
+          id: movie.id,
+          title: movie.title,
+          poster_path: movie.poster_path,
+          vote_average: movie.vote_average,
+          release_date: movie.release_date,
+        }}
+      />
       <CastList cast={movie.credits.cast} />
       <TrailerSection videos={movie.videos.results} />
       <MovieGrid movies={movie.similar.results} heading="Ähnliche Filme" />

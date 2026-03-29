@@ -1,6 +1,9 @@
 "use client";
 
 import { ThemeProvider } from "next-themes";
+import { AuthProvider } from "@/contexts/auth-context";
+import { WatchlistProvider } from "@/contexts/watchlist-context";
+import { DownloadProvider } from "@/contexts/download-context";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -10,7 +13,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       forcedTheme="dark"
       disableTransitionOnChange
     >
-      {children}
+      <AuthProvider>
+        <WatchlistProvider>
+          <DownloadProvider>{children}</DownloadProvider>
+        </WatchlistProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
