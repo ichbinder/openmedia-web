@@ -1,62 +1,60 @@
 # OpenMedia Web
 
-Next.js Frontend für die CineScope Film-Plattform.
+Next.js Frontend für die OpenMedia Film-Plattform.
+
+> 📚 **Gesamtdokumentation:** [openmedia-docs](https://github.com/ichbinder/openmedia-docs)
 
 ## Tech Stack
 
-- **Framework:** Next.js 16 (App Router)
+- **Framework:** Next.js 16 (App Router, React 19)
 - **UI:** shadcn/ui + Tailwind CSS v4
 - **Theme:** Dunkles Cinema-Theme (oklch)
-- **Daten:** TMDB API (serverseitig)
-- **Auth:** JWT via httpOnly Cookie (Proxy zu openmedia-api)
-- **Tests:** Vitest + Playwright
+- **Daten:** TMDB API (serverseitig) + openmedia-api (via Proxy)
+- **Auth:** JWT via httpOnly Cookie
+- **Tests:** Vitest (10) + Playwright E2E (10)
+
+## Architektur
+
+```
+Browser ──▶ openmedia-web ──Proxy──▶ openmedia-api
+                │
+           TMDB API (Filme, Bilder)
+```
+
+Der Proxy (`/api/backend/*`) leitet Requests an openmedia-api weiter und handelt JWT-Cookies automatisch.
 
 ## Setup
 
 ```bash
-# Dependencies installieren
 npm install
-
-# Playwright Browser installieren (für E2E)
-npx playwright install chromium
-
-# Dev-Server starten
-npm run dev
-```
-
-## Umgebungsvariablen
-
-```env
-TMDB_API_KEY=dein-tmdb-api-key
-BACKEND_URL=http://localhost:4000
+npx playwright install chromium  # für E2E-Tests
+npm run dev   # → http://localhost:3000
 ```
 
 ## Seiten
 
-- `/` — Trending-Startseite mit Hero-Banner
-- `/search` — Filmsuche
-- `/genres` — Genre-Übersicht
-- `/movie/[id]` — Film-Detailseite
-- `/login` — Anmelden
-- `/register` — Registrieren
-- `/watchlist` — Persönliche Watchlist
-- `/downloads` — Bereitstellungen
-- `/bibliothek` — Persönliche Bibliothek
+| Route | Beschreibung |
+|---|---|
+| `/` | Trending-Startseite mit Hero-Banner |
+| `/search` | Filmsuche mit Debounce |
+| `/genres` | Genre-Übersicht + gefilterte Grids |
+| `/movie/[id]` | Film-Detail (Cast, Trailer, ähnliche Filme) |
+| `/login` | Anmelden |
+| `/register` | Registrieren |
+| `/watchlist` | Persönliche Watchlist |
+| `/downloads` | Bereitstellungen (Mock) |
+| `/bibliothek` | Persönliche Bibliothek (Mock) |
 
 ## Tests
 
 ```bash
-# Unit Tests
-npm test
-
-# E2E Tests (braucht laufende Server)
-npm run test:e2e
-
-# E2E mit UI
-npm run test:e2e:ui
+npm test          # 10 Unit Tests (Vitest)
+npm run test:e2e  # 10 E2E Tests (Playwright)
 ```
 
-## API Proxy
+## Umgebungsvariablen
 
-Requests an `/api/backend/*` werden an den Express-Server weitergeleitet.
-JWT wird als httpOnly Cookie gesetzt — kein Token im Browser-JavaScript sichtbar.
+| Variable | Beschreibung |
+|---|---|
+| `TMDB_API_KEY` | TMDB API Key |
+| `BACKEND_URL` | openmedia-api URL (default: `http://localhost:4000`) |
