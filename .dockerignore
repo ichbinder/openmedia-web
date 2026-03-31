@@ -1,0 +1,13 @@
+node_modules
+.next
+.env
+.env.*
+.gsd
+.git
+server
+backend
+data
+e2e
+test-results
+playwright-report
+*.log
