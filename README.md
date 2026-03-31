@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OpenMedia Web
 
-## Getting Started
+Next.js Frontend für die OpenMedia Film-Plattform.
 
-First, run the development server:
+> 📚 **Gesamtdokumentation:** [openmedia-docs](https://github.com/ichbinder/openmedia-docs)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router, React 19)
+- **UI:** shadcn/ui + Tailwind CSS v4
+- **Theme:** Dunkles Cinema-Theme (oklch)
+- **Daten:** TMDB API (serverseitig) + openmedia-api (via Proxy)
+- **Auth:** JWT via httpOnly Cookie
+- **Tests:** Vitest (10) + Playwright E2E (10)
+
+## Architektur
+
+```
+Browser ──▶ openmedia-web ──Proxy──▶ openmedia-api
+                │
+           TMDB API (Filme, Bilder)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Der Proxy (`/api/backend/*`) leitet Requests an openmedia-api weiter und handelt JWT-Cookies automatisch.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npx playwright install chromium  # für E2E-Tests
+npm run dev   # → http://localhost:3000
+```
 
-## Learn More
+## Seiten
 
-To learn more about Next.js, take a look at the following resources:
+| Route | Beschreibung |
+|---|---|
+| `/` | Trending-Startseite mit Hero-Banner |
+| `/search` | Filmsuche mit Debounce |
+| `/genres` | Genre-Übersicht + gefilterte Grids |
+| `/movie/[id]` | Film-Detail (Cast, Trailer, ähnliche Filme) |
+| `/login` | Anmelden |
+| `/register` | Registrieren |
+| `/watchlist` | Persönliche Watchlist |
+| `/downloads` | Bereitstellungen (Mock) |
+| `/bibliothek` | Persönliche Bibliothek (Mock) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Tests
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm test          # 10 Unit Tests (Vitest)
+npm run test:e2e  # 10 E2E Tests (Playwright)
+```
 
-## Deploy on Vercel
+## Umgebungsvariablen
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Variable | Beschreibung |
+|---|---|
+| `TMDB_API_KEY` | TMDB API Key |
+| `BACKEND_URL` | openmedia-api URL (default: `http://localhost:4000`) |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Docker Deployment
+
+```bash
+docker build -t openmedia-web .
+docker run -p 3000:3000 \
+  -e TMDB_API_KEY=your-key \
+  -e BACKEND_URL=https://api.mediatoken.de \
+  openmedia-web
+```
+
+Production: Läuft hinter Caddy Reverse Proxy auf `mediatoken.de`.
