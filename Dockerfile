@@ -1,6 +1,10 @@
 FROM node:22-alpine AS builder
 
 WORKDIR /app
+
+ARG TMDB_API_KEY
+ENV TMDB_API_KEY=$TMDB_API_KEY
+
 COPY package*.json ./
 RUN npm ci
 COPY . .
