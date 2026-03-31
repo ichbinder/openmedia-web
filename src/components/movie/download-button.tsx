@@ -1,21 +1,21 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   Download,
   Loader2,
   CheckCircle2,
   XCircle,
-  Search,
   Server,
-  Play,
   CloudDownload,
 } from "lucide-react";
 import { useDownloads, getStatusLabel } from "@/contexts/download-context";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import type { NzbFileInfo } from "@/lib/backend";
 
-interface ProvisionButtonProps {
+interface DownloadButtonProps {
   movie: {
     id: number;
     title: string;
@@ -26,26 +26,42 @@ interface ProvisionButtonProps {
   className?: string;
 }
 
-export function ProvisionButton({ movie, className }: ProvisionButtonProps) {
+export function DownloadButton({ movie, className }: DownloadButtonProps) {
   const { user } = useAuth();
-  const {
-    provisionMovie,
-    cancelProvision,
-    getProvision,
-    isUsenetAvailable,
-  } = useDownloads();
+  const { jobs, startDownload, cancelJob, getLink, checkAvailability } = useDownloads();
   const router = useRouter();
 
-  const provision = getProvision(movie.id);
-  const usenetAvailable = isUsenetAvailable(movie.id);
+  const [nzbFiles, setNzbFiles] = useState<NzbFileInfo[]>([]);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
-  const isActive =
-    provision &&
-    provision.status !== "ready" &&
-    provision.status !== "failed";
-  const isReady = provision?.status === "ready";
+  // Check if NZB files exist for this movie
+  useEffect(() => {
+    if (!user) return;
+    setIsChecking(true);
+    checkAvailability(movie.id)
+      .then(setNzbFiles)
+      .finally(() => setIsChecking(false));
+  }, [user, movie.id, checkAvailability]);
 
-  function handleProvision(e: React.MouseEvent) {
+  // Find active/completed job for any of this movie's NZB files
+  const activeJob = jobs.find(
+    (j) =>
+      nzbFiles.some((f) => f.id === j.nzbFileId) &&
+      j.status !== "completed" &&
+      j.status !== "failed"
+  );
+  const completedJob = jobs.find(
+    (j) =>
+      nzbFiles.some((f) => f.id === j.nzbFileId) &&
+      j.status === "completed"
+  );
+
+  // Also check: is the file already in S3 (downloaded previously)?
+  const availableFile = nzbFiles.find((f) => f.s3Key);
+
+  async function handleDownload(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
 
@@ -54,58 +70,95 @@ export function ProvisionButton({ movie, className }: ProvisionButtonProps) {
       return;
     }
 
-    if (isActive) {
-      cancelProvision(movie.id);
+    // If already completed or available in S3 → get download link
+    const fileId = completedJob?.nzbFileId || availableFile?.id;
+    if (fileId) {
+      const url = await getLink(fileId);
+      if (url) {
+        window.open(url, "_blank");
+      }
       return;
     }
 
-    provisionMovie({
-      movieId: movie.id,
-      title: movie.title,
-      posterPath: movie.poster_path,
-      voteAverage: movie.vote_average,
-      releaseDate: movie.release_date,
-      source: usenetAvailable ? "usenet" : "search",
-    });
+    // If active → cancel
+    if (activeJob) {
+      await cancelJob(activeJob.id);
+      return;
+    }
+
+    // Start download with the best available NZB file (prefer highest resolution)
+    const bestFile = nzbFiles.sort((a, b) => {
+      const order = ["2160p", "1080p", "720p", "480p"];
+      return (order.indexOf(a.resolution || "") || 99) - (order.indexOf(b.resolution || "") || 99);
+    })[0];
+
+    if (!bestFile) return;
+
+    setIsStarting(true);
+    await startDownload(bestFile.id);
+    setIsStarting(false);
   }
 
-  // Film is ready — show Stream + Download buttons
-  if (isReady) {
+  // Not logged in
+  if (!user) {
     return (
-      <div className={cn("flex flex-wrap gap-2", className)}>
-        <button
-          className="flex items-center gap-2 rounded-md bg-cinema-gold px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // Mock: navigate to detail page (real streaming later)
-            router.push(`/movie/${movie.id}`);
-          }}
-        >
-          <Play className="size-4 fill-black" />
-          Streamen
-        </button>
-        <button
-          className="flex items-center gap-2 rounded-md bg-muted px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // Mock: no actual download
-          }}
-        >
-          <Download className="size-4" />
-          Herunterladen
-        </button>
-      </div>
+      <button
+        onClick={() => router.push("/login")}
+        className={cn(
+          "flex items-center gap-2 rounded-md bg-muted px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/80",
+          className
+        )}
+      >
+        <Download className="size-4" />
+        Anmelden zum Herunterladen
+      </button>
     );
   }
 
-  // Provisioning in progress
-  if (isActive) {
-    const statusLabel = getStatusLabel(provision!.status, provision!.source);
+  // Loading availability
+  if (isChecking) {
+    return (
+      <button disabled className={cn("flex items-center gap-2 rounded-md bg-muted px-4 py-2 text-sm font-medium text-muted-foreground opacity-50", className)}>
+        <Loader2 className="size-4 animate-spin" />
+        Verfügbarkeit prüfen…
+      </button>
+    );
+  }
+
+  // No NZB files found for this movie
+  if (nzbFiles.length === 0) {
+    return (
+      <button disabled className={cn("flex items-center gap-2 rounded-md bg-muted px-4 py-2 text-sm font-medium text-muted-foreground opacity-50", className)}>
+        <XCircle className="size-4" />
+        Nicht verfügbar
+      </button>
+    );
+  }
+
+  // Already in S3 or completed → download button
+  if (availableFile || completedJob) {
     return (
       <button
-        onClick={handleProvision}
+        onClick={handleDownload}
+        className={cn(
+          "flex items-center gap-2 rounded-md bg-cinema-gold px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90",
+          className
+        )}
+      >
+        <Download className="size-4" />
+        Herunterladen
+        {availableFile?.resolution && (
+          <span className="rounded bg-black/20 px-1.5 py-0.5 text-xs">{availableFile.resolution}</span>
+        )}
+      </button>
+    );
+  }
+
+  // Active download
+  if (activeJob) {
+    return (
+      <button
+        onClick={handleDownload}
         className={cn(
           "flex items-center gap-2 rounded-md bg-cinema-gold/20 px-4 py-2 text-sm font-medium text-cinema-gold transition-colors hover:bg-cinema-gold/30",
           className
@@ -113,40 +166,35 @@ export function ProvisionButton({ movie, className }: ProvisionButtonProps) {
       >
         <Loader2 className="size-4 animate-spin" />
         <span className="flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
-          <span>{statusLabel}</span>
-          <span className="text-xs opacity-70">{provision!.progress}% — Klick zum Abbrechen</span>
+          <span>{getStatusLabel(activeJob.status)}</span>
+          <span className="text-xs opacity-70">{activeJob.progress}%</span>
         </span>
       </button>
     );
   }
 
-  // Not started — show provision button based on availability
-  if (usenetAvailable) {
-    return (
-      <button
-        onClick={handleProvision}
-        className={cn(
-          "flex items-center gap-2 rounded-md bg-green-500/20 px-4 py-2 text-sm font-medium text-green-400 transition-colors hover:bg-green-500/30",
-          className
-        )}
-      >
-        <Server className="size-4" />
-        Verfügbar machen
-        <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-xs">Usenet</span>
-      </button>
-    );
-  }
-
+  // Ready to start download
   return (
     <button
-      onClick={handleProvision}
+      onClick={handleDownload}
+      disabled={isStarting}
       className={cn(
-        "flex items-center gap-2 rounded-md bg-orange-500/20 px-4 py-2 text-sm font-medium text-orange-400 transition-colors hover:bg-orange-500/30",
+        "flex items-center gap-2 rounded-md bg-green-500/20 px-4 py-2 text-sm font-medium text-green-400 transition-colors hover:bg-green-500/30",
         className
       )}
     >
-      <Search className="size-4" />
-      Film suchen & bereitstellen
+      {isStarting ? (
+        <Loader2 className="size-4 animate-spin" />
+      ) : (
+        <CloudDownload className="size-4" />
+      )}
+      Verfügbar machen
+      {nzbFiles[0]?.resolution && (
+        <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-xs">{nzbFiles[0].resolution}</span>
+      )}
     </button>
   );
 }
+
+// Re-export for backward compatibility
+export { DownloadButton as ProvisionButton };
