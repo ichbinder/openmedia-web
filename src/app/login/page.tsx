@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
@@ -16,16 +16,18 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const redirectTo = searchParams.get("redirect") || "/";
 
-  // Already logged in — redirect
-  if (user) {
-    router.replace(redirectTo);
-    return null;
-  }
+  // Already logged in — redirect via effect (not early return, to preserve hook order)
+  useEffect(() => {
+    if (user) {
+      router.replace(redirectTo);
+    }
+  }, [user, router, redirectTo]);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
 
@@ -34,13 +36,21 @@ export default function LoginPage() {
       return;
     }
 
-    const result = login({ email, password });
-    if (result.success) {
-      router.replace(redirectTo);
-    } else {
-      setError(result.error);
+    setIsSubmitting(true);
+    try {
+      const result = await login({ email, password });
+      if (result.success) {
+        router.replace(redirectTo);
+      } else {
+        setError(result.error);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   }
+
+  // Don't render form if already logged in
+  if (user) return null;
 
   return (
     <div className="flex min-h-[70vh] items-center justify-center px-4">
@@ -85,8 +95,8 @@ export default function LoginPage() {
             />
           </div>
 
-          <Button type="submit" className="w-full">
-            Anmelden
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? "Wird angemeldet…" : "Anmelden"}
           </Button>
         </form>
 

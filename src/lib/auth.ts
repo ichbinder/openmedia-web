@@ -1,4 +1,4 @@
-// Auth types and localStorage helpers — mock implementation, designed to swap for real API later
+// Auth types and API helpers — real backend via /api/backend/auth/*
 
 export interface AuthUser {
   id: string;
@@ -15,110 +15,71 @@ export interface RegisterData extends AuthCredentials {
   name: string;
 }
 
-interface StoredUser {
-  id: string;
-  email: string;
-  name: string;
-  passwordHash: string; // simple hash for mock — not secure, placeholder only
-}
-
-const USERS_KEY = "cinescope_users";
-const SESSION_KEY = "cinescope_session";
-
-// Simple hash for mock purposes — NOT cryptographically secure
-function mockHash(password: string): string {
-  let hash = 0;
-  for (let i = 0; i < password.length; i++) {
-    const char = password.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return `mock_${hash.toString(36)}`;
-}
-
-function getStoredUsers(): StoredUser[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveUsers(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-function getSession(): AuthUser | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveSession(user: AuthUser | null) {
-  if (user) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-  } else {
-    localStorage.removeItem(SESSION_KEY);
-  }
-}
-
 export type AuthResult =
   | { success: true; user: AuthUser }
   | { success: false; error: string };
 
-export function registerUser(data: RegisterData): AuthResult {
-  const users = getStoredUsers();
-  const existing = users.find(
-    (u) => u.email.toLowerCase() === data.email.toLowerCase()
-  );
-  if (existing) {
-    return { success: false, error: "Ein Konto mit dieser E-Mail existiert bereits." };
+const API_BASE = "/api/backend/auth";
+
+export async function registerUser(data: RegisterData): Promise<AuthResult> {
+  try {
+    const res = await fetch(`${API_BASE}/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      return { success: false, error: json.error || "Registrierung fehlgeschlagen." };
+    }
+
+    return { success: true, user: json.user };
+  } catch {
+    return { success: false, error: "Verbindung zum Server fehlgeschlagen." };
   }
-
-  const newUser: StoredUser = {
-    id: `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    email: data.email.toLowerCase(),
-    name: data.name,
-    passwordHash: mockHash(data.password),
-  };
-
-  users.push(newUser);
-  saveUsers(users);
-
-  const authUser: AuthUser = { id: newUser.id, email: newUser.email, name: newUser.name };
-  saveSession(authUser);
-  return { success: true, user: authUser };
 }
 
-export function loginUser(credentials: AuthCredentials): AuthResult {
-  const users = getStoredUsers();
-  const user = users.find(
-    (u) => u.email.toLowerCase() === credentials.email.toLowerCase()
-  );
+export async function loginUser(credentials: AuthCredentials): Promise<AuthResult> {
+  try {
+    const res = await fetch(`${API_BASE}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(credentials),
+    });
 
-  if (!user) {
-    return { success: false, error: "E-Mail oder Passwort ist falsch." };
+    const json = await res.json();
+
+    if (!res.ok) {
+      return { success: false, error: json.error || "Anmeldung fehlgeschlagen." };
+    }
+
+    return { success: true, user: json.user };
+  } catch {
+    return { success: false, error: "Verbindung zum Server fehlgeschlagen." };
   }
-
-  if (user.passwordHash !== mockHash(credentials.password)) {
-    return { success: false, error: "E-Mail oder Passwort ist falsch." };
-  }
-
-  const authUser: AuthUser = { id: user.id, email: user.email, name: user.name };
-  saveSession(authUser);
-  return { success: true, user: authUser };
 }
 
-export function logoutUser() {
-  saveSession(null);
+export async function logoutUser(): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/logout`, { method: "POST" });
+  } catch {
+    // Cookie wird serverseitig gelöscht — Fehler hier ist unkritisch
+  }
 }
 
-export function getCurrentUser(): AuthUser | null {
-  return getSession();
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const res = await fetch(`${API_BASE}/me`);
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const json = await res.json();
+    return json.user ?? null;
+  } catch {
+    return null;
+  }
 }

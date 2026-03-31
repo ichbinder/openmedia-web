@@ -21,67 +21,87 @@ export interface WatchlistItem {
 
 interface WatchlistContextValue {
   items: WatchlistItem[];
-  add: (item: Omit<WatchlistItem, "addedAt">) => void;
-  remove: (movieId: number) => void;
+  isLoading: boolean;
+  add: (item: Omit<WatchlistItem, "addedAt">) => Promise<void>;
+  remove: (movieId: number) => Promise<void>;
   isInWatchlist: (movieId: number) => boolean;
 }
 
 const WatchlistContext = createContext<WatchlistContextValue | null>(null);
 
-function getStorageKey(userId: string) {
-  return `cinescope_watchlist_${userId}`;
-}
-
-function loadWatchlist(userId: string): WatchlistItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(getStorageKey(userId));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveWatchlist(userId: string, items: WatchlistItem[]) {
-  localStorage.setItem(getStorageKey(userId), JSON.stringify(items));
-}
+const API_BASE = "/api/backend/watchlist";
 
 export function WatchlistProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [items, setItems] = useState<WatchlistItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Load watchlist when user changes
+  // Load watchlist from API when user changes
   useEffect(() => {
-    if (user) {
-      setItems(loadWatchlist(user.id));
-    } else {
+    if (!user) {
       setItems([]);
+      return;
     }
+
+    setIsLoading(true);
+    fetch(API_BASE)
+      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((data) => setItems(data.items ?? []))
+      .catch(() => setItems([]))
+      .finally(() => setIsLoading(false));
   }, [user]);
 
   const add = useCallback(
-    (item: Omit<WatchlistItem, "addedAt">) => {
+    async (item: Omit<WatchlistItem, "addedAt">) => {
       if (!user) return;
+
+      // Optimistic update
+      const tempItem: WatchlistItem = { ...item, addedAt: new Date().toISOString() };
       setItems((prev) => {
         if (prev.some((i) => i.movieId === item.movieId)) return prev;
-        const next = [...prev, { ...item, addedAt: new Date().toISOString() }];
-        saveWatchlist(user.id, next);
-        return next;
+        return [tempItem, ...prev];
       });
+
+      try {
+        const res = await fetch(API_BASE, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item),
+        });
+
+        if (!res.ok) {
+          // Rollback on failure
+          setItems((prev) => prev.filter((i) => i.movieId !== item.movieId));
+        }
+      } catch {
+        // Rollback on network error
+        setItems((prev) => prev.filter((i) => i.movieId !== item.movieId));
+      }
     },
     [user]
   );
 
   const remove = useCallback(
-    (movieId: number) => {
+    async (movieId: number) => {
       if (!user) return;
-      setItems((prev) => {
-        const next = prev.filter((i) => i.movieId !== movieId);
-        saveWatchlist(user.id, next);
-        return next;
-      });
+
+      // Optimistic remove
+      const previousItems = items;
+      setItems((prev) => prev.filter((i) => i.movieId !== movieId));
+
+      try {
+        const res = await fetch(`${API_BASE}/${movieId}`, { method: "DELETE" });
+
+        if (!res.ok) {
+          // Rollback on failure
+          setItems(previousItems);
+        }
+      } catch {
+        // Rollback on network error
+        setItems(previousItems);
+      }
     },
-    [user]
+    [user, items]
   );
 
   const isInWatchlist = useCallback(
@@ -90,7 +110,7 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <WatchlistContext.Provider value={{ items, add, remove, isInWatchlist }}>
+    <WatchlistContext.Provider value={{ items, isLoading, add, remove, isInWatchlist }}>
       {children}
     </WatchlistContext.Provider>
   );

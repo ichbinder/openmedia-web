@@ -67,3 +67,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local dev artifacts
+.bg-shell/
+.brv/
+backend/
+data/
+e2e/
+movies.tar
+playwright-report/
+playwright.config.ts
+scripts/
+server/
+test-results/
+vitest.config.ts

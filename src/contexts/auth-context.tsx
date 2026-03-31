@@ -22,9 +22,9 @@ import {
 interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
-  login: (credentials: AuthCredentials) => AuthResult;
-  register: (data: RegisterData) => AuthResult;
-  logout: () => void;
+  login: (credentials: AuthCredentials) => Promise<AuthResult>;
+  register: (data: RegisterData) => Promise<AuthResult>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -33,31 +33,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session from localStorage on mount
+  // Restore session from cookie on mount — calls /api/backend/auth/me
   useEffect(() => {
-    const stored = getCurrentUser();
-    setUser(stored);
-    setIsLoading(false);
+    getCurrentUser()
+      .then((u) => setUser(u))
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback((credentials: AuthCredentials): AuthResult => {
-    const result = loginUser(credentials);
+  const login = useCallback(async (credentials: AuthCredentials): Promise<AuthResult> => {
+    const result = await loginUser(credentials);
     if (result.success) {
       setUser(result.user);
     }
     return result;
   }, []);
 
-  const register = useCallback((data: RegisterData): AuthResult => {
-    const result = registerUser(data);
+  const register = useCallback(async (data: RegisterData): Promise<AuthResult> => {
+    const result = await registerUser(data);
     if (result.success) {
       setUser(result.user);
     }
     return result;
   }, []);
 
-  const logout = useCallback(() => {
-    logoutUser();
+  const logout = useCallback(async () => {
+    await logoutUser();
     setUser(null);
   }, []);
 

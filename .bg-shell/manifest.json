@@ -1,16 +1,16 @@
 [
   {
-    "id": "0ac04562",
-    "label": "next-dev",
-    "command": "cd /Users/jakob/git/movie-test-02 && npm run dev",
+    "id": "e880d35b",
+    "label": "api-server",
+    "command": "cd /Users/jakob/git/openmedia-api && set -a && source .env && set +a && npm run dev 2>&1",
     "cwd": "/Users/jakob/git/movie-test-02",
-    "ownerSessionFile": "/Users/jakob/.gsd/sessions/--Users-jakob-git-movie-test-02--/2026-03-27T20-01-20-280Z_5385e56c-5451-41a8-8573-b7c0346ab919.jsonl",
+    "ownerSessionFile": "/Users/jakob/.gsd/sessions/--Users-jakob-git-movie-test-02--/2026-03-30T13-46-34-724Z_b8e79ecc-839f-4b45-bacf-cf475b49c53c.jsonl",
     "persistAcrossSessions": false,
-    "startedAt": 1774688928905,
+    "startedAt": 1774955536973,
     "processType": "server",
     "group": null,
     "readyPattern": null,
-    "readyPort": 3000,
-    "pid": 9754
+    "readyPort": 4000,
+    "pid": 86002
   }
 ]
