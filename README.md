@@ -58,3 +58,15 @@ npm run test:e2e  # 10 E2E Tests (Playwright)
 |---|---|
 | `TMDB_API_KEY` | TMDB API Key |
 | `BACKEND_URL` | openmedia-api URL (default: `http://localhost:4000`) |
+
+## Docker Deployment
+
+```bash
+docker build -t openmedia-web .
+docker run -p 3000:3000 \
+  -e TMDB_API_KEY=your-key \
+  -e BACKEND_URL=https://api.mediatoken.de \
+  openmedia-web
+```
+
+Production: Läuft hinter Caddy Reverse Proxy auf `mediatoken.de`.
