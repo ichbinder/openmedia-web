@@ -10,254 +10,193 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { getToken } from "@/lib/auth";
+import {
+  type DownloadJob,
+  type NzbFileInfo,
+  createDownloadJob,
+  getDownloadJob,
+  getDownloadJobs,
+  deleteDownloadJob,
+  getNzbMovieByTmdb,
+  getDownloadLink,
+} from "@/lib/backend";
 
-/**
- * Source: how the film is being provisioned
- * - "usenet": Film exists in Usenet, straightforward download + unpack
- * - "search": Film not in Usenet, requires external search + download + upload to Usenet as backup
- */
-export type ProvisionSource = "usenet" | "search";
+// ── Status Labels ────────────────────────────────────────────
 
-/**
- * Provisioning status — the stages a film goes through before it's ready:
- *
- * For Usenet source:
- *   queued → downloading → unpacking → ready
- *
- * For Search source:
- *   queued → searching → downloading → unpacking → uploading_backup → ready
- *
- * Either path can end in "failed"
- */
-export type ProvisionStatus =
-  | "queued"
-  | "searching"       // search source only: looking for the film
-  | "downloading"     // downloading from Usenet or external source
-  | "unpacking"       // extracting/preparing the film
-  | "uploading_backup" // search source only: uploading to Usenet as backup
-  | "ready"           // film on server, available for stream/download
-  | "failed";
+type JobStatus = DownloadJob["status"];
 
-export interface ProvisionItem {
-  movieId: number;
-  title: string;
-  posterPath: string | null;
-  voteAverage: number;
-  releaseDate: string;
-  source: ProvisionSource;
-  status: ProvisionStatus;
-  progress: number; // 0-100 overall progress
-  startedAt: string;
-  completedAt: string | null;
-}
-
-interface DownloadContextValue {
-  items: ProvisionItem[];
-  provisionMovie: (movie: Omit<ProvisionItem, "status" | "progress" | "startedAt" | "completedAt">) => void;
-  cancelProvision: (movieId: number) => void;
-  removeProvision: (movieId: number) => void;
-  getProvision: (movieId: number) => ProvisionItem | undefined;
-  activeCount: number;
-  readyItems: ProvisionItem[];
-  isUsenetAvailable: (movieId: number) => boolean;
-}
-
-const DownloadContext = createContext<DownloadContextValue | null>(null);
-
-function getStorageKey(userId: string) {
-  return `cinescope_provisions_${userId}`;
-}
-
-function loadProvisions(userId: string): ProvisionItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(getStorageKey(userId));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveProvisions(userId: string, items: ProvisionItem[]) {
-  localStorage.setItem(getStorageKey(userId), JSON.stringify(items));
-}
-
-/**
- * Mock Usenet availability: deterministic based on movieId.
- * ~30% of movies are "in Usenet". Uses a simple hash so the same
- * movie always returns the same result within a session.
- */
-function mockUsenetAvailable(movieId: number): boolean {
-  // Simple deterministic hash — same movieId always gives same result
-  const hash = ((movieId * 2654435761) >>> 0) % 100;
-  return hash < 30; // 30% chance
-}
-
-// Simulation timing
-const TICK_INTERVAL_MS = 500;
-
-// Progress stages for each source type
-// Usenet: download (60%) → unpack (40%) = 100%
-// Search: search (20%) → download (40%) → unpack (20%) → upload backup (20%) = 100%
-function getNextState(item: ProvisionItem): { status: ProvisionStatus; progress: number } {
-  const p = item.progress;
-
-  if (item.source === "usenet") {
-    // Usenet path: ~10s total (5% per tick)
-    const next = Math.min(p + 5, 100);
-    if (next < 60) return { status: "downloading", progress: next };
-    if (next < 100) return { status: "unpacking", progress: next };
-    return { status: "ready", progress: 100 };
-  }
-
-  // Search path: ~20s total (2.5% per tick)
-  const next = Math.min(p + 2.5, 100);
-  if (next < 20) return { status: "searching", progress: next };
-  if (next < 60) return { status: "downloading", progress: next };
-  if (next < 80) return { status: "unpacking", progress: next };
-  if (next < 100) return { status: "uploading_backup", progress: next };
-  return { status: "ready", progress: 100 };
-}
-
-function getStatusLabel(status: ProvisionStatus, source: ProvisionSource): string {
+export function getStatusLabel(status: JobStatus): string {
   switch (status) {
     case "queued": return "Wartend…";
-    case "searching": return "Film wird gesucht…";
-    case "downloading": return source === "usenet" ? "Lade aus Usenet…" : "Wird heruntergeladen…";
-    case "unpacking": return "Wird entpackt…";
-    case "uploading_backup": return "Backup ins Usenet…";
-    case "ready": return "Bereit";
+    case "provisioning": return "Server wird gestartet…";
+    case "downloading": return "Wird heruntergeladen…";
+    case "uploading": return "Wird hochgeladen…";
+    case "completed": return "Bereit";
     case "failed": return "Fehlgeschlagen";
   }
 }
 
-export { getStatusLabel };
+// ── Context Types ────────────────────────────────────────────
+
+interface DownloadContextValue {
+  /** All download jobs for the current user */
+  jobs: DownloadJob[];
+  /** Start a download for an NZB file */
+  startDownload: (nzbFileId: string) => Promise<DownloadJob | null>;
+  /** Cancel/delete a queued job */
+  cancelJob: (jobId: string) => Promise<void>;
+  /** Get a specific job by NZB file ID */
+  getJobForFile: (nzbFileId: string) => DownloadJob | undefined;
+  /** Check if a TMDB movie has NZB files available */
+  checkAvailability: (tmdbId: number) => Promise<NzbFileInfo[]>;
+  /** Get presigned download URL for an NZB file */
+  getLink: (nzbFileId: string) => Promise<string | null>;
+  /** Number of active (non-terminal) jobs */
+  activeCount: number;
+  /** Jobs that are completed (ready for download) */
+  completedJobs: DownloadJob[];
+  /** Loading state */
+  isLoading: boolean;
+  /** Refresh jobs from API */
+  refresh: () => Promise<void>;
+}
+
+const DownloadContext = createContext<DownloadContextValue | null>(null);
+
+// ── Poll interval for active downloads ───────────────────────
+const POLL_INTERVAL_MS = 5000;
 
 export function DownloadProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [items, setItems] = useState<ProvisionItem[]>([]);
-  const userIdRef = useRef<string | null>(null);
+  const [jobs, setJobs] = useState<DownloadJob[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── Fetch all jobs from API ──────────────────────────────
+  const fetchJobs = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+
+    const res = await getDownloadJobs(token);
+    if (res.ok && res.data?.jobs) {
+      setJobs(res.data.jobs);
+    }
+  }, []);
+
+  // ── Load jobs on login ───────────────────────────────────
   useEffect(() => {
     if (user) {
-      userIdRef.current = user.id;
-      setItems(loadProvisions(user.id));
+      setIsLoading(true);
+      fetchJobs().finally(() => setIsLoading(false));
     } else {
-      userIdRef.current = null;
-      setItems([]);
+      setJobs([]);
     }
-  }, [user]);
+  }, [user, fetchJobs]);
 
-  const hasActive = items.some(
-    (d) => d.status !== "ready" && d.status !== "failed"
+  // ── Poll active jobs ─────────────────────────────────────
+  const hasActive = jobs.some(
+    (j) => j.status !== "completed" && j.status !== "failed"
   );
 
   useEffect(() => {
-    if (!hasActive) return;
-
-    const timer = setInterval(() => {
-      setItems((prev) => {
-        let changed = false;
-        const next = prev.map((d) => {
-          if (d.status === "ready" || d.status === "failed") return d;
-          changed = true;
-          const { status, progress } = getNextState(d);
-          return {
-            ...d,
-            status,
-            progress,
-            completedAt: status === "ready" ? new Date().toISOString() : null,
-          };
-        });
-        if (!changed) return prev;
-        if (userIdRef.current) {
-          saveProvisions(userIdRef.current, next);
-        }
-        return next;
-      });
-    }, TICK_INTERVAL_MS);
-
-    return () => clearInterval(timer);
-  }, [hasActive]);
-
-  useEffect(() => {
-    if (userIdRef.current && items.length >= 0) {
-      saveProvisions(userIdRef.current, items);
+    if (!hasActive || !user) {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      return;
     }
-  }, [items]);
 
-  const provisionMovie = useCallback(
-    (movie: Omit<ProvisionItem, "status" | "progress" | "startedAt" | "completedAt">) => {
-      if (!user) return;
-      setItems((prev) => {
-        if (prev.some((d) => d.movieId === movie.movieId && d.status !== "ready" && d.status !== "failed")) {
-          return prev;
-        }
-        const filtered = prev.filter((d) => d.movieId !== movie.movieId);
-        return [
-          ...filtered,
-          {
-            ...movie,
-            status: "queued" as const,
-            progress: 0,
-            startedAt: new Date().toISOString(),
-            completedAt: null,
-          },
-        ];
-      });
+    pollRef.current = setInterval(fetchJobs, POLL_INTERVAL_MS);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [hasActive, user, fetchJobs]);
+
+  // ── Start a download ─────────────────────────────────────
+  const startDownload = useCallback(
+    async (nzbFileId: string): Promise<DownloadJob | null> => {
+      const token = getToken();
+      if (!token) return null;
+
+      const res = await createDownloadJob(nzbFileId, token);
+      if (res.ok && res.data?.job) {
+        setJobs((prev) => [...prev.filter((j) => j.id !== res.data.job.id), res.data.job]);
+        return res.data.job;
+      }
+      return null;
     },
-    [user]
-  );
-
-  const cancelProvision = useCallback(
-    (movieId: number) => {
-      if (!user) return;
-      setItems((prev) =>
-        prev.map((d) =>
-          d.movieId === movieId && d.status !== "ready" && d.status !== "failed"
-            ? { ...d, status: "failed" as const }
-            : d
-        )
-      );
-    },
-    [user]
-  );
-
-  const removeProvision = useCallback(
-    (movieId: number) => {
-      if (!user) return;
-      setItems((prev) => prev.filter((d) => d.movieId !== movieId));
-    },
-    [user]
-  );
-
-  const getProvision = useCallback(
-    (movieId: number) => items.find((d) => d.movieId === movieId),
-    [items]
-  );
-
-  const isUsenetAvailable = useCallback(
-    (movieId: number) => mockUsenetAvailable(movieId),
     []
   );
 
-  const activeCount = items.filter(
-    (d) => d.status !== "ready" && d.status !== "failed"
+  // ── Cancel a job ─────────────────────────────────────────
+  const cancelJob = useCallback(
+    async (jobId: string) => {
+      const token = getToken();
+      if (!token) return;
+
+      await deleteDownloadJob(jobId, token);
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    },
+    []
+  );
+
+  // ── Get job for a specific NZB file ──────────────────────
+  const getJobForFile = useCallback(
+    (nzbFileId: string) => jobs.find((j) => j.nzbFileId === nzbFileId),
+    [jobs]
+  );
+
+  // ── Check NZB availability for a TMDB movie ──────────────
+  const checkAvailability = useCallback(
+    async (tmdbId: number): Promise<NzbFileInfo[]> => {
+      const token = getToken();
+      if (!token) return [];
+
+      const res = await getNzbMovieByTmdb(tmdbId, token);
+      if (res.ok && res.data?.movie?.nzbFiles) {
+        return res.data.movie.nzbFiles;
+      }
+      return [];
+    },
+    []
+  );
+
+  // ── Get presigned download link ──────────────────────────
+  const getLink = useCallback(
+    async (nzbFileId: string): Promise<string | null> => {
+      const token = getToken();
+      if (!token) return null;
+
+      const res = await getDownloadLink(nzbFileId, token);
+      if (res.ok && res.data?.url) {
+        return res.data.url;
+      }
+      return null;
+    },
+    []
+  );
+
+  const activeCount = jobs.filter(
+    (j) => j.status !== "completed" && j.status !== "failed"
   ).length;
 
-  const readyItems = items.filter((d) => d.status === "ready");
+  const completedJobs = jobs.filter((j) => j.status === "completed");
 
   return (
     <DownloadContext.Provider
       value={{
-        items,
-        provisionMovie,
-        cancelProvision,
-        removeProvision,
-        getProvision,
+        jobs,
+        startDownload,
+        cancelJob,
+        getJobForFile,
+        checkAvailability,
+        getLink,
         activeCount,
-        readyItems,
-        isUsenetAvailable,
+        completedJobs,
+        isLoading,
+        refresh: fetchJobs,
       }}
     >
       {children}

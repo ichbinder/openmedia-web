@@ -16,10 +16,27 @@ export interface RegisterData extends AuthCredentials {
 }
 
 export type AuthResult =
-  | { success: true; user: AuthUser }
+  | { success: true; user: AuthUser; token: string }
   | { success: false; error: string };
 
 const API_BASE = "/api/backend/auth";
+const TOKEN_KEY = "openmedia_token";
+
+/** Get stored token */
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+/** Store token */
+function setToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+/** Clear token */
+function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
 
 export async function registerUser(data: RegisterData): Promise<AuthResult> {
   try {
@@ -35,7 +52,8 @@ export async function registerUser(data: RegisterData): Promise<AuthResult> {
       return { success: false, error: json.error || "Registrierung fehlgeschlagen." };
     }
 
-    return { success: true, user: json.user };
+    setToken(json.token);
+    return { success: true, user: json.user, token: json.token };
   } catch {
     return { success: false, error: "Verbindung zum Server fehlgeschlagen." };
   }
@@ -55,25 +73,28 @@ export async function loginUser(credentials: AuthCredentials): Promise<AuthResul
       return { success: false, error: json.error || "Anmeldung fehlgeschlagen." };
     }
 
-    return { success: true, user: json.user };
+    setToken(json.token);
+    return { success: true, user: json.user, token: json.token };
   } catch {
     return { success: false, error: "Verbindung zum Server fehlgeschlagen." };
   }
 }
 
 export async function logoutUser(): Promise<void> {
-  try {
-    await fetch(`${API_BASE}/logout`, { method: "POST" });
-  } catch {
-    // Cookie wird serverseitig gelöscht — Fehler hier ist unkritisch
-  }
+  clearToken();
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
+  const token = getToken();
+  if (!token) return null;
+
   try {
-    const res = await fetch(`${API_BASE}/me`);
+    const res = await fetch(`${API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     if (!res.ok) {
+      clearToken();
       return null;
     }
 

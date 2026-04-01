@@ -2,13 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import {
-  useDownloads,
-  getStatusLabel,
-  type ProvisionItem,
-} from "@/contexts/download-context";
+import { useDownloads, getStatusLabel } from "@/contexts/download-context";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { getPosterUrl } from "@/lib/tmdb";
+import type { DownloadJob } from "@/lib/backend";
 import {
   Download,
   Loader2,
@@ -16,114 +13,84 @@ import {
   XCircle,
   Trash2,
   Film,
-  Server,
-  Search,
 } from "lucide-react";
 
-function ProvisionRow({ item }: { item: ProvisionItem }) {
-  const { cancelProvision, removeProvision } = useDownloads();
-  const posterUrl = item.posterPath
-    ? getPosterUrl(item.posterPath, "w92")
+function JobRow({ job }: { job: DownloadJob }) {
+  const { cancelJob, getLink } = useDownloads();
+  const movie = job.nzbFile?.movie;
+  const posterUrl = movie?.posterPath
+    ? getPosterUrl(movie.posterPath, "w92")
     : null;
-  const year = item.releaseDate?.split("-")[0] ?? "";
 
-  const isActive = item.status !== "ready" && item.status !== "failed";
-  const statusLabel = getStatusLabel(item.status, item.source);
+  const isActive = job.status !== "completed" && job.status !== "failed";
+  const isCompleted = job.status === "completed";
+  const isFailed = job.status === "failed";
 
   return (
     <div className="flex items-center gap-4 rounded-lg border border-border/40 bg-card p-3">
-      {/* Poster thumbnail */}
+      {/* Poster */}
       <Link
-        href={`/movie/${item.movieId}`}
-        className="relative size-16 flex-shrink-0 overflow-hidden rounded bg-muted"
+        href={`/movie/${movie?.tmdbId || ""}`}
+        className="relative h-16 w-11 shrink-0 overflow-hidden rounded bg-muted"
       >
         {posterUrl ? (
-          <Image
-            src={posterUrl}
-            alt={item.title}
-            fill
-            className="object-cover"
-            sizes="64px"
-          />
+          <Image src={posterUrl} alt={movie?.titleDe || ""} fill className="object-cover" sizes="44px" />
         ) : (
-          <div className="flex h-full items-center justify-center">
+          <div className="flex h-full w-full items-center justify-center">
             <Film className="size-5 text-muted-foreground" />
           </div>
         )}
       </Link>
 
       {/* Info */}
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/movie/${item.movieId}`}
-            className="truncate text-sm font-medium text-foreground hover:text-cinema-gold"
-          >
-            {item.title}
-          </Link>
-          {/* Source badge */}
-          {item.source === "usenet" ? (
-            <span className="flex shrink-0 items-center gap-1 rounded bg-green-500/20 px-1.5 py-0.5 text-xs text-green-400">
-              <Server className="size-2.5" />
-              Usenet
-            </span>
-          ) : (
-            <span className="flex shrink-0 items-center gap-1 rounded bg-orange-500/20 px-1.5 py-0.5 text-xs text-orange-400">
-              <Search className="size-2.5" />
-              Suche
-            </span>
+      <div className="flex-1 min-w-0">
+        <p className="truncate font-medium text-sm">{movie?.titleDe || movie?.titleEn || "Unbekannt"}</p>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {isActive && <Loader2 className="size-3 animate-spin text-cinema-gold" />}
+          {isCompleted && <CheckCircle2 className="size-3 text-green-500" />}
+          {isFailed && <XCircle className="size-3 text-red-500" />}
+          <span>{getStatusLabel(job.status)}</span>
+          {isActive && <span className="text-cinema-gold">{job.progress}%</span>}
+          {job.nzbFile?.resolution && (
+            <span className="rounded bg-muted px-1.5 py-0.5">{job.nzbFile.resolution}</span>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">{year}</span>
-
-        {/* Progress bar for active provisions */}
-        {isActive && (
-          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-cinema-gold transition-all duration-300"
-              style={{ width: `${item.progress}%` }}
-            />
-          </div>
+        {isFailed && job.error && (
+          <p className="mt-1 text-xs text-red-400 truncate">{job.error}</p>
         )}
       </div>
 
-      {/* Status + actions */}
-      <div className="flex items-center gap-2">
-        {isActive && (
-          <span className="flex items-center gap-1 text-xs text-cinema-gold">
-            <Loader2 className="size-3.5 animate-spin" />
-            <span className="hidden sm:inline">{statusLabel}</span>
-            <span className="sm:hidden">{item.progress}%</span>
-          </span>
-        )}
-        {item.status === "ready" && (
-          <span className="flex items-center gap-1 text-xs text-green-400">
-            <CheckCircle2 className="size-3.5" />
-            Bereit
-          </span>
-        )}
-        {item.status === "failed" && (
-          <span className="flex items-center gap-1 text-xs text-destructive">
-            <XCircle className="size-3.5" />
-            Fehlgeschlagen
-          </span>
-        )}
+      {/* Progress bar */}
+      {isActive && (
+        <div className="w-24 shrink-0">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-cinema-gold transition-all duration-300"
+              style={{ width: `${job.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
-        {isActive && (
+      {/* Actions */}
+      <div className="flex gap-1 shrink-0">
+        {isCompleted && (
           <button
-            onClick={() => cancelProvision(item.movieId)}
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Abbrechen"
+            onClick={async () => {
+              const url = await getLink(job.nzbFileId);
+              if (url) window.open(url, "_blank");
+            }}
+            className="rounded p-2 text-green-400 hover:bg-green-500/10"
+            title="Herunterladen"
           >
-            <XCircle className="size-4" />
+            <Download className="size-4" />
           </button>
         )}
-
-        {(item.status === "ready" || item.status === "failed") && (
+        {isActive && (
           <button
-            onClick={() => removeProvision(item.movieId)}
-            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Entfernen"
+            onClick={() => cancelJob(job.id)}
+            className="rounded p-2 text-red-400 hover:bg-red-500/10"
+            title="Abbrechen"
           >
             <Trash2 className="size-4" />
           </button>
@@ -134,64 +101,55 @@ function ProvisionRow({ item }: { item: ProvisionItem }) {
 }
 
 function DownloadsContent() {
-  const { items } = useDownloads();
+  const { jobs, isLoading } = useDownloads();
 
-  const active = items.filter(
-    (d) => d.status !== "ready" && d.status !== "failed"
-  );
-  const ready = items.filter((d) => d.status === "ready");
-  const failed = items.filter((d) => d.status === "failed");
-
-  if (items.length === 0) {
+  if (isLoading) {
     return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
-        <Download className="size-12 text-muted-foreground" />
-        <h2 className="text-xl font-semibold">Keine Bereitstellungen</h2>
-        <p className="max-w-md text-sm text-muted-foreground">
-          Gehe zu einer Film-Detailseite und klicke auf &quot;Verfügbar machen&quot; oder
-          &quot;Film suchen&quot;, um einen Film bereitzustellen.
-        </p>
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="size-8 animate-spin text-cinema-gold" />
       </div>
     );
   }
 
+  if (jobs.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-20 text-center text-muted-foreground">
+        <Download className="size-12 opacity-40" />
+        <div>
+          <p className="text-lg font-medium">Keine Downloads</p>
+          <p className="text-sm">Starte einen Download über die Film-Detailseite.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const active = jobs.filter((j) => j.status !== "completed" && j.status !== "failed");
+  const completed = jobs.filter((j) => j.status === "completed");
+  const failed = jobs.filter((j) => j.status === "failed");
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {active.length > 0 && (
         <section>
-          <h2 className="mb-4 text-lg font-semibold text-foreground">
-            In Bearbeitung ({active.length})
-          </h2>
-          <div className="space-y-3">
-            {active.map((item) => (
-              <ProvisionRow key={item.movieId} item={item} />
-            ))}
+          <h2 className="mb-3 text-lg font-semibold">Aktive Downloads ({active.length})</h2>
+          <div className="space-y-2">
+            {active.map((job) => <JobRow key={job.id} job={job} />)}
           </div>
         </section>
       )}
-
-      {ready.length > 0 && (
+      {completed.length > 0 && (
         <section>
-          <h2 className="mb-4 text-lg font-semibold text-foreground">
-            Bereitgestellt ({ready.length})
-          </h2>
-          <div className="space-y-3">
-            {ready.map((item) => (
-              <ProvisionRow key={item.movieId} item={item} />
-            ))}
+          <h2 className="mb-3 text-lg font-semibold text-green-400">Bereit ({completed.length})</h2>
+          <div className="space-y-2">
+            {completed.map((job) => <JobRow key={job.id} job={job} />)}
           </div>
         </section>
       )}
-
       {failed.length > 0 && (
         <section>
-          <h2 className="mb-4 text-lg font-semibold text-foreground">
-            Fehlgeschlagen ({failed.length})
-          </h2>
-          <div className="space-y-3">
-            {failed.map((item) => (
-              <ProvisionRow key={item.movieId} item={item} />
-            ))}
+          <h2 className="mb-3 text-lg font-semibold text-red-400">Fehlgeschlagen ({failed.length})</h2>
+          <div className="space-y-2">
+            {failed.map((job) => <JobRow key={job.id} job={job} />)}
           </div>
         </section>
       )}
@@ -201,11 +159,9 @@ function DownloadsContent() {
 
 export default function DownloadsPage() {
   return (
-    <ProtectedRoute message="Melde dich an, um deine Bereitstellungen zu sehen.">
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="mb-6 text-2xl font-bold text-foreground sm:text-3xl">
-          Bereitstellungen
-        </h1>
+    <ProtectedRoute>
+      <div className="container mx-auto max-w-3xl px-4 py-8">
+        <h1 className="mb-6 text-2xl font-bold">Downloads</h1>
         <DownloadsContent />
       </div>
     </ProtectedRoute>
