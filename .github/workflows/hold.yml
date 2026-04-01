@@ -1,0 +1,19 @@
+name: Hold Check
+
+on:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize]
+
+jobs:
+  hold-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for hold label
+        run: |
+          if echo '${{ toJson(github.event.pull_request.labels.*.name) }}' | grep -q '"hold"'; then
+            echo "❌ PR has 'hold' label — merge is blocked."
+            echo "Remove the 'hold' label to allow merging."
+            exit 1
+          else
+            echo "✅ No 'hold' label — merge allowed."
+          fi
