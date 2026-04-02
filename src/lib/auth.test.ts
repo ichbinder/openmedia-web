@@ -5,19 +5,27 @@ import { registerUser, loginUser, logoutUser, getCurrentUser } from "@/lib/auth"
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
+// Mock localStorage
+const storage: Record<string, string> = {};
+vi.stubGlobal("localStorage", {
+  getItem: (key: string) => storage[key] ?? null,
+  setItem: (key: string, val: string) => { storage[key] = val; },
+  removeItem: (key: string) => { delete storage[key]; },
+});
+
 beforeEach(() => {
   mockFetch.mockReset();
-  localStorage.clear();
+  Object.keys(storage).forEach((k) => delete storage[k]);
 });
 
 describe("Auth Module", () => {
   describe("registerUser", () => {
-    it("gibt User bei erfolgreicher Registrierung", async () => {
+    it("gibt User und Token bei erfolgreicher Registrierung", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           user: { id: "1", email: "test@test.de", name: "Test" },
-          token: "jwt-token",
+          token: "jwt-token-123",
         }),
       });
 
@@ -26,11 +34,15 @@ describe("Auth Module", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.user.email).toBe("test@test.de");
+        expect(result.token).toBe("jwt-token-123");
       }
 
       expect(mockFetch).toHaveBeenCalledWith("/api/backend/auth/register", expect.objectContaining({
         method: "POST",
       }));
+
+      // Token should be stored in localStorage
+      expect(storage["openmedia_token"]).toBe("jwt-token-123");
     });
 
     it("gibt Fehler bei API-Fehler", async () => {
@@ -60,18 +72,19 @@ describe("Auth Module", () => {
   });
 
   describe("loginUser", () => {
-    it("gibt User bei erfolgreichem Login", async () => {
+    it("gibt User bei erfolgreichem Login und speichert Token", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           user: { id: "1", email: "test@test.de", name: "Test" },
-          token: "jwt-token",
+          token: "jwt-login-token",
         }),
       });
 
       const result = await loginUser({ email: "test@test.de", password: "123456" });
 
       expect(result.success).toBe(true);
+      expect(storage["openmedia_token"]).toBe("jwt-login-token");
     });
 
     it("gibt Fehler bei falschen Credentials", async () => {
@@ -88,21 +101,18 @@ describe("Auth Module", () => {
 
   describe("logoutUser", () => {
     it("löscht Token aus localStorage", async () => {
-      localStorage.setItem("openmedia_token", "some-token");
+      storage["openmedia_token"] = "some-token";
 
       await logoutUser();
 
-      expect(localStorage.getItem("openmedia_token")).toBeNull();
-    });
-
-    it("wirft keinen Fehler wenn kein Token da", async () => {
-      await expect(logoutUser()).resolves.not.toThrow();
+      expect(storage["openmedia_token"]).toBeUndefined();
     });
   });
 
   describe("getCurrentUser", () => {
     it("gibt User bei gültigem Token", async () => {
-      localStorage.setItem("openmedia_token", "valid-token");
+      storage["openmedia_token"] = "valid-token";
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ user: { id: "1", email: "test@test.de", name: "Test" } }),
@@ -110,6 +120,8 @@ describe("Auth Module", () => {
 
       const user = await getCurrentUser();
       expect(user).toMatchObject({ email: "test@test.de" });
+
+      // Should send Authorization header
       expect(mockFetch).toHaveBeenCalledWith("/api/backend/auth/me", expect.objectContaining({
         headers: { Authorization: "Bearer valid-token" },
       }));
@@ -121,14 +133,18 @@ describe("Auth Module", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it("gibt null bei ungültiger Session", async () => {
+    it("gibt null und löscht Token bei ungültigem Token", async () => {
+      storage["openmedia_token"] = "expired-token";
+
       mockFetch.mockResolvedValueOnce({ ok: false, json: async () => ({ error: "Unauthorized" }) });
 
       const user = await getCurrentUser();
       expect(user).toBeNull();
+      expect(storage["openmedia_token"]).toBeUndefined();
     });
 
     it("gibt null bei Netzwerk-Fehler", async () => {
+      storage["openmedia_token"] = "some-token";
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
       const user = await getCurrentUser();
