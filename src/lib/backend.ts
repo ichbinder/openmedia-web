@@ -116,3 +116,49 @@ export interface DownloadLink {
 export async function getDownloadLink(nzbFileId: string, token: string, expires = "7d") {
   return backendFetch<DownloadLink>(`/nzb/files/${nzbFileId}/download-link?expires=${expires}`, { token });
 }
+
+// ── Library ──────────────────────────────────────────────────
+
+export interface LibraryItem {
+  id: string;
+  addedAt: string;
+  removedAt: string | null;
+  nzbFile: NzbFileInfo & {
+    lastAccessedAt: string | null;
+    scheduledDeletionAt: string | null;
+    movie: {
+      id: string;
+      tmdbId: number;
+      titleDe: string;
+      titleEn: string;
+      year: number | null;
+      posterPath: string | null;
+    };
+  };
+}
+
+export async function getLibrary(token: string) {
+  return backendFetch<{ items: LibraryItem[] }>("/library", { token });
+}
+
+export async function addToLibrary(nzbFileId: string, token: string) {
+  return backendFetch("/library", {
+    method: "POST",
+    body: JSON.stringify({ nzbFileId }),
+    token,
+  });
+}
+
+export async function removeFromLibrary(nzbFileId: string, token: string) {
+  return backendFetch<{ removed: boolean; s3Deleted: boolean; activeUsers?: number }>(
+    `/library/${nzbFileId}`,
+    { method: "DELETE", token }
+  );
+}
+
+export async function getRetention(nzbFileId: string, token: string) {
+  return backendFetch<{ activeUsers: number; inS3: boolean; scheduledDeletionAt: string | null }>(
+    `/library/retention/${nzbFileId}`,
+    { token }
+  );
+}
