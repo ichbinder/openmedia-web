@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "de-DE"
+reviews:
+  profile: "chill"
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  path_filters:
+    - "!.next/**"
+    - "!dist/**"
+    - "!node_modules/**"
+    - "!package-lock.json"
+    - "!test-results/**"
+    - "!playwright-report/**"
+  path_instructions:
+    - path: "src/app/api/**"
+      instructions: >-
+        Review API route handlers for security: proper cookie handling,
+        no secret leakage, correct HTTP status codes, error handling.
+        The proxy route must always forward the JWT from cookie to Bearer header.
+    - path: "src/contexts/**"
+      instructions: >-
+        Review React contexts for proper state management, cleanup on unmount,
+        and correct hook usage (no conditional hooks).
+    - path: "src/lib/**"
+      instructions: >-
+        Review utility modules for type safety, error handling,
+        and proper async/await patterns.
+    - path: "e2e/**"
+      instructions: >-
+        Review Playwright tests for flakiness: proper waits, no hardcoded timeouts,
+        use of stable selectors.
+  tools:
+    github-checks:
+      enabled: true
+      timeout_ms: 90000
+  auto_review:
+    enabled: true
+    drafts: false
