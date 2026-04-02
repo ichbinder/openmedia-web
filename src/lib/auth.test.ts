@@ -7,6 +7,7 @@ vi.stubGlobal("fetch", mockFetch);
 
 beforeEach(() => {
   mockFetch.mockReset();
+  localStorage.clear();
 });
 
 describe("Auth Module", () => {
@@ -86,26 +87,22 @@ describe("Auth Module", () => {
   });
 
   describe("logoutUser", () => {
-    it("ruft Logout-Endpoint auf", async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    it("löscht Token aus localStorage", async () => {
+      localStorage.setItem("openmedia_token", "some-token");
 
       await logoutUser();
 
-      expect(mockFetch).toHaveBeenCalledWith("/api/backend/auth/logout", expect.objectContaining({
-        method: "POST",
-      }));
+      expect(localStorage.getItem("openmedia_token")).toBeNull();
     });
 
-    it("fängt Netzwerk-Fehler ab", async () => {
-      mockFetch.mockRejectedValueOnce(new Error("Network error"));
-
-      // Should not throw
+    it("wirft keinen Fehler wenn kein Token da", async () => {
       await expect(logoutUser()).resolves.not.toThrow();
     });
   });
 
   describe("getCurrentUser", () => {
-    it("gibt User bei gültiger Session", async () => {
+    it("gibt User bei gültigem Token", async () => {
+      localStorage.setItem("openmedia_token", "valid-token");
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ user: { id: "1", email: "test@test.de", name: "Test" } }),
@@ -113,6 +110,15 @@ describe("Auth Module", () => {
 
       const user = await getCurrentUser();
       expect(user).toMatchObject({ email: "test@test.de" });
+      expect(mockFetch).toHaveBeenCalledWith("/api/backend/auth/me", expect.objectContaining({
+        headers: { Authorization: "Bearer valid-token" },
+      }));
+    });
+
+    it("gibt null wenn kein Token vorhanden", async () => {
+      const user = await getCurrentUser();
+      expect(user).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it("gibt null bei ungültiger Session", async () => {
