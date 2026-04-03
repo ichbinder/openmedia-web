@@ -126,6 +126,8 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   // Polls fast when downloads are progressing, slows down
   // when nothing changes (e.g. stuck provisioning).
   useEffect(() => {
+    let cancelled = false;
+
     if (!hasActive || !user) {
       if (pollRef.current) {
         clearTimeout(pollRef.current);
@@ -140,6 +142,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     const schedulePoll = () => {
       pollRef.current = setTimeout(async () => {
         const freshJobs = await fetchJobs();
+
+        // Don't continue if effect was cleaned up during fetch
+        if (cancelled) return;
 
         // Compute hash from freshly fetched data (not stale closure)
         const freshActive = freshJobs.filter(
@@ -169,6 +174,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     schedulePoll();
 
     return () => {
+      cancelled = true;
       if (pollRef.current) clearTimeout(pollRef.current);
     };
   }, [hasActive, user, fetchJobs]);
