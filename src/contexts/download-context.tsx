@@ -84,6 +84,7 @@ const POLL_INTERVAL_INITIAL_MS = 5_000;
 const POLL_INTERVAL_MAX_MS = 60_000;
 /** Backoff multiplier per unchanged poll cycle */
 const POLL_BACKOFF_FACTOR = 1.5;
+
 export function DownloadProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
