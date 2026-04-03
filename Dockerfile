@@ -1,5 +1,10 @@
 FROM node:22-alpine AS builder
 
+ARG BACKEND_URL=http://localhost:4000
+ARG TMDB_API_KEY
+ENV BACKEND_URL=$BACKEND_URL
+ENV TMDB_API_KEY=$TMDB_API_KEY
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
