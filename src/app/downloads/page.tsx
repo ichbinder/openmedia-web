@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useDownloads, getStatusLabel } from "@/contexts/download-context";
+import { useDownloads, getStatusLabel, isJobStale } from "@/contexts/download-context";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { getPosterUrl } from "@/lib/tmdb";
 import type { DownloadJob } from "@/lib/backend";
 import {
+  AlertTriangle,
   Download,
   Loader2,
   CheckCircle2,
@@ -25,6 +26,7 @@ function JobRow({ job }: { job: DownloadJob }) {
   const isActive = job.status !== "completed" && job.status !== "failed";
   const isCompleted = job.status === "completed";
   const isFailed = job.status === "failed";
+  const stale = isJobStale(job);
 
   return (
     <div className="flex items-center gap-4 rounded-lg border border-border/40 bg-card p-3">
@@ -46,15 +48,21 @@ function JobRow({ job }: { job: DownloadJob }) {
       <div className="flex-1 min-w-0">
         <p className="truncate font-medium text-sm">{movie?.titleDe || movie?.titleEn || "Unbekannt"}</p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {isActive && <Loader2 className="size-3 animate-spin text-cinema-gold" />}
+          {isActive && !stale && <Loader2 className="size-3 animate-spin text-cinema-gold" />}
+          {stale && <AlertTriangle className="size-3 text-amber-500" />}
           {isCompleted && <CheckCircle2 className="size-3 text-green-500" />}
           {isFailed && <XCircle className="size-3 text-red-500" />}
-          <span>{getStatusLabel(job.status)}</span>
-          {isActive && <span className="text-cinema-gold">{job.progress}%</span>}
+          <span>{stale ? "Möglicherweise hängengeblieben" : getStatusLabel(job.status)}</span>
+          {isActive && !stale && <span className="text-cinema-gold">{job.progress}%</span>}
           {job.nzbFile?.resolution && (
             <span className="rounded bg-muted px-1.5 py-0.5">{job.nzbFile.resolution}</span>
           )}
         </div>
+        {stale && (
+          <p className="mt-1 text-xs text-amber-400">
+            Keine Fortschritte seit über 2 Stunden. Wird automatisch bereinigt.
+          </p>
+        )}
         {isFailed && job.error && (
           <p className="mt-1 text-xs text-red-400 truncate">{job.error}</p>
         )}
