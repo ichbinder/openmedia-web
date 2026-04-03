@@ -45,6 +45,7 @@ export function getStatusLabel(status: JobStatus): string {
 export function isJobStale(job: DownloadJob): boolean {
   if (job.status === "completed" || job.status === "failed") return false;
   const updatedAt = new Date(job.updatedAt).getTime();
+  if (Number.isNaN(updatedAt)) return false;
   const ageHours = (Date.now() - updatedAt) / (1000 * 60 * 60);
   return ageHours >= CLIENT_STALE_HOURS;
 }
@@ -71,7 +72,7 @@ interface DownloadContextValue {
   /** Loading state */
   isLoading: boolean;
   /** Refresh jobs from API */
-  refresh: () => Promise<void>;
+  refresh: () => Promise<DownloadJob[] | void>;
 }
 
 const DownloadContext = createContext<DownloadContextValue | null>(null);
@@ -92,14 +93,18 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   const lastJobsHashRef = useRef("");
 
   // ── Fetch all jobs from API ──────────────────────────────
-  const fetchJobs = useCallback(async () => {
+  // Returns the fresh jobs array so callers can use it directly
+  // (avoids stale-closure issues with React state).
+  const fetchJobs = useCallback(async (): Promise<DownloadJob[]> => {
     const token = getToken();
-    if (!token) return;
+    if (!token) return [];
 
     const res = await getDownloadJobs(token);
     if (res.ok && res.data?.jobs) {
       setJobs(res.data.jobs);
+      return res.data.jobs;
     }
+    return [];
   }, []);
 
   // ── Load jobs on login ───────────────────────────────────
@@ -112,14 +117,10 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     }
   }, [user, fetchJobs]);
 
-  // ── Client-side stale detection ──────────────────────────
-  // Mark jobs as "probably stuck" on the client if they haven't
-  // progressed in CLIENT_STALE_HOURS. These stay in their API status
-  // but the UI can show a warning.
-  const activeJobs = jobs.filter(
-    (j) => j.status !== "completed" && j.status !== "failed"
+  // ── Derived state ─────────────────────────────────────────
+  const hasActive = jobs.some(
+    (j) => j.status !== "completed" && j.status !== "failed",
   );
-  const hasActive = activeJobs.length > 0;
 
   // ── Adaptive polling with exponential backoff ────────────
   // Polls fast when downloads are progressing, slows down
@@ -138,11 +139,13 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
     const schedulePoll = () => {
       pollRef.current = setTimeout(async () => {
-        await fetchJobs();
+        const freshJobs = await fetchJobs();
 
-        // Compute a simple hash of active job statuses + progress
-        // to detect whether anything changed
-        const currentHash = activeJobs
+        // Compute hash from freshly fetched data (not stale closure)
+        const freshActive = freshJobs.filter(
+          (j) => j.status !== "completed" && j.status !== "failed",
+        );
+        const currentHash = freshActive
           .map((j) => `${j.id}:${j.status}:${j.progress}`)
           .sort()
           .join("|");
@@ -168,7 +171,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     return () => {
       if (pollRef.current) clearTimeout(pollRef.current);
     };
-  }, [hasActive, user, fetchJobs, activeJobs]);
+  }, [hasActive, user, fetchJobs]);
 
   // ── Start a download ─────────────────────────────────────
   const startDownload = useCallback(

@@ -69,7 +69,7 @@ function JobRow({ job }: { job: DownloadJob }) {
       </div>
 
       {/* Progress bar */}
-      {isActive && (
+      {isActive && !stale && (
         <div className="w-24 shrink-0">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
