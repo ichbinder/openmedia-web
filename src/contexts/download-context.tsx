@@ -9,6 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
 import { getToken } from "@/lib/auth";
 import {
@@ -78,6 +79,8 @@ interface DownloadContextValue {
 const DownloadContext = createContext<DownloadContextValue | null>(null);
 
 // ── Poll configuration ───────────────────────────────────────
+/** Fast poll interval during upload phase (upload completes quickly) */
+const POLL_INTERVAL_FAST_MS = 3_000;
 /** Initial poll interval when downloads are active */
 const POLL_INTERVAL_INITIAL_MS = 5_000;
 /** Maximum poll interval after backoff (kept short so status changes are visible within seconds) */
@@ -92,6 +95,40 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollIntervalRef = useRef(POLL_INTERVAL_INITIAL_MS);
   const lastJobsHashRef = useRef("");
+  /** Track previous job statuses to detect transitions */
+  const prevStatusMapRef = useRef<Map<string, string>>(new Map());
+
+  // ── Notify on status transitions ──────────────────────────
+  const notifyTransitions = useCallback((freshJobs: DownloadJob[]) => {
+    const prevMap = prevStatusMapRef.current;
+
+    for (const job of freshJobs) {
+      const prevStatus = prevMap.get(job.id);
+      if (!prevStatus) continue; // first fetch, no transition
+      if (prevStatus === job.status) continue;
+
+      const movieTitle = job.nzbFile?.movie?.titleDe || job.nzbFile?.movie?.titleEn || "Film";
+
+      if (job.status === "completed" && prevStatus !== "completed") {
+        toast.success(`${movieTitle} ist bereit`, {
+          description: "Du kannst den Film jetzt herunterladen.",
+          duration: 8_000,
+        });
+      } else if (job.status === "failed" && prevStatus !== "failed") {
+        toast.error(`Download fehlgeschlagen: ${movieTitle}`, {
+          description: job.error || "Unbekannter Fehler",
+          duration: 10_000,
+        });
+      }
+    }
+
+    // Update previous status map
+    const newMap = new Map<string, string>();
+    for (const job of freshJobs) {
+      newMap.set(job.id, job.status);
+    }
+    prevStatusMapRef.current = newMap;
+  }, []);
 
   // ── Fetch all jobs from API ──────────────────────────────
   // Returns the fresh jobs array so callers can use it directly
@@ -102,21 +139,39 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
     const res = await getDownloadJobs(token);
     if (res.ok && res.data?.jobs) {
+      notifyTransitions(res.data.jobs);
       setJobs(res.data.jobs);
       return res.data.jobs;
     }
     return [];
-  }, []);
+  }, [notifyTransitions]);
 
   // ── Load jobs on login ───────────────────────────────────
   useEffect(() => {
     if (user) {
       setIsLoading(true);
-      fetchJobs().finally(() => setIsLoading(false));
+      // First fetch: populate prevStatusMap without triggering toasts
+      const token = getToken();
+      if (token) {
+        getDownloadJobs(token).then((res) => {
+          if (res.ok && res.data?.jobs) {
+            const initialMap = new Map<string, string>();
+            for (const job of res.data.jobs) {
+              initialMap.set(job.id, job.status);
+            }
+            prevStatusMapRef.current = initialMap;
+            setJobs(res.data.jobs);
+          }
+          setIsLoading(false);
+        }).catch(() => setIsLoading(false));
+      } else {
+        setIsLoading(false);
+      }
     } else {
       setJobs([]);
+      prevStatusMapRef.current = new Map();
     }
-  }, [user, fetchJobs]);
+  }, [user]);
 
   // ── Derived state ─────────────────────────────────────────
   const hasActive = jobs.some(
@@ -165,7 +220,14 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
           .sort()
           .join("|");
 
-        if (currentHash === lastJobsHashRef.current) {
+        // Upload phase: poll fast because uploads complete quickly with rclone
+        const hasUploading = freshActive.some((j) => j.status === "uploading");
+
+        if (hasUploading) {
+          // Always poll fast during upload — completion is imminent
+          pollIntervalRef.current = POLL_INTERVAL_FAST_MS;
+          lastJobsHashRef.current = currentHash;
+        } else if (currentHash === lastJobsHashRef.current) {
           // Nothing changed → backoff
           pollIntervalRef.current = Math.min(
             pollIntervalRef.current * POLL_BACKOFF_FACTOR,
