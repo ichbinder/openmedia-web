@@ -22,6 +22,10 @@ import {
   getDownloadLink,
 } from "@/lib/backend";
 
+// ── Constants ────────────────────────────────────────────────
+/** Hours after which a non-terminal job is considered stale on the client */
+const CLIENT_STALE_HOURS = 2;
+
 // ── Status Labels ────────────────────────────────────────────
 
 type JobStatus = DownloadJob["status"];
@@ -35,6 +39,15 @@ export function getStatusLabel(status: JobStatus): string {
     case "completed": return "Bereit";
     case "failed": return "Fehlgeschlagen";
   }
+}
+
+/** Check if a job appears stuck (non-terminal for too long). */
+export function isJobStale(job: DownloadJob): boolean {
+  if (job.status === "completed" || job.status === "failed") return false;
+  const updatedAt = new Date(job.updatedAt).getTime();
+  if (Number.isNaN(updatedAt)) return false;
+  const ageHours = (Date.now() - updatedAt) / (1000 * 60 * 60);
+  return ageHours >= CLIENT_STALE_HOURS;
 }
 
 // ── Context Types ────────────────────────────────────────────
@@ -59,29 +72,40 @@ interface DownloadContextValue {
   /** Loading state */
   isLoading: boolean;
   /** Refresh jobs from API */
-  refresh: () => Promise<void>;
+  refresh: () => Promise<DownloadJob[] | void>;
 }
 
 const DownloadContext = createContext<DownloadContextValue | null>(null);
 
-// ── Poll interval for active downloads ───────────────────────
-const POLL_INTERVAL_MS = 5000;
+// ── Poll configuration ───────────────────────────────────────
+/** Initial poll interval when downloads are active */
+const POLL_INTERVAL_INITIAL_MS = 5_000;
+/** Maximum poll interval after backoff */
+const POLL_INTERVAL_MAX_MS = 60_000;
+/** Backoff multiplier per unchanged poll cycle */
+const POLL_BACKOFF_FACTOR = 1.5;
 
 export function DownloadProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollIntervalRef = useRef(POLL_INTERVAL_INITIAL_MS);
+  const lastJobsHashRef = useRef("");
 
   // ── Fetch all jobs from API ──────────────────────────────
-  const fetchJobs = useCallback(async () => {
+  // Returns the fresh jobs array so callers can use it directly
+  // (avoids stale-closure issues with React state).
+  const fetchJobs = useCallback(async (): Promise<DownloadJob[]> => {
     const token = getToken();
-    if (!token) return;
+    if (!token) return [];
 
     const res = await getDownloadJobs(token);
     if (res.ok && res.data?.jobs) {
       setJobs(res.data.jobs);
+      return res.data.jobs;
     }
+    return [];
   }, []);
 
   // ── Load jobs on login ───────────────────────────────────
@@ -94,23 +118,65 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     }
   }, [user, fetchJobs]);
 
-  // ── Poll active jobs ─────────────────────────────────────
+  // ── Derived state ─────────────────────────────────────────
   const hasActive = jobs.some(
-    (j) => j.status !== "completed" && j.status !== "failed"
+    (j) => j.status !== "completed" && j.status !== "failed",
   );
 
+  // ── Adaptive polling with exponential backoff ────────────
+  // Polls fast when downloads are progressing, slows down
+  // when nothing changes (e.g. stuck provisioning).
   useEffect(() => {
+    let cancelled = false;
+
     if (!hasActive || !user) {
       if (pollRef.current) {
-        clearInterval(pollRef.current);
+        clearTimeout(pollRef.current);
         pollRef.current = null;
       }
+      // Reset interval for next active download
+      pollIntervalRef.current = POLL_INTERVAL_INITIAL_MS;
+      lastJobsHashRef.current = "";
       return;
     }
 
-    pollRef.current = setInterval(fetchJobs, POLL_INTERVAL_MS);
+    const schedulePoll = () => {
+      pollRef.current = setTimeout(async () => {
+        const freshJobs = await fetchJobs();
+
+        // Don't continue if effect was cleaned up during fetch
+        if (cancelled) return;
+
+        // Compute hash from freshly fetched data (not stale closure)
+        const freshActive = freshJobs.filter(
+          (j) => j.status !== "completed" && j.status !== "failed",
+        );
+        const currentHash = freshActive
+          .map((j) => `${j.id}:${j.status}:${j.progress}`)
+          .sort()
+          .join("|");
+
+        if (currentHash === lastJobsHashRef.current) {
+          // Nothing changed → backoff
+          pollIntervalRef.current = Math.min(
+            pollIntervalRef.current * POLL_BACKOFF_FACTOR,
+            POLL_INTERVAL_MAX_MS,
+          );
+        } else {
+          // Progress detected → reset to fast polling
+          pollIntervalRef.current = POLL_INTERVAL_INITIAL_MS;
+          lastJobsHashRef.current = currentHash;
+        }
+
+        schedulePoll();
+      }, pollIntervalRef.current);
+    };
+
+    schedulePoll();
+
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      cancelled = true;
+      if (pollRef.current) clearTimeout(pollRef.current);
     };
   }, [hasActive, user, fetchJobs]);
 

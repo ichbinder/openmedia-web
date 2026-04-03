@@ -42,6 +42,7 @@ export interface DownloadJob {
   progress: number;
   error: string | null;
   createdAt: string;
+  updatedAt: string;
   completedAt: string | null;
   nzbFileId: string;
   nzbFile: {
