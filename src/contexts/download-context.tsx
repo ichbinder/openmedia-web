@@ -80,8 +80,8 @@ const DownloadContext = createContext<DownloadContextValue | null>(null);
 // ── Poll configuration ───────────────────────────────────────
 /** Initial poll interval when downloads are active */
 const POLL_INTERVAL_INITIAL_MS = 5_000;
-/** Maximum poll interval after backoff */
-const POLL_INTERVAL_MAX_MS = 60_000;
+/** Maximum poll interval after backoff (kept short so status changes are visible within seconds) */
+const POLL_INTERVAL_MAX_MS = 15_000;
 /** Backoff multiplier per unchanged poll cycle */
 const POLL_BACKOFF_FACTOR = 1.5;
 
@@ -151,6 +151,15 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         const freshActive = freshJobs.filter(
           (j) => j.status !== "completed" && j.status !== "failed",
         );
+
+        // If no active jobs remain, stop polling immediately.
+        // The useEffect will clean up on re-render when hasActive flips.
+        if (freshActive.length === 0) {
+          pollIntervalRef.current = POLL_INTERVAL_INITIAL_MS;
+          lastJobsHashRef.current = "";
+          return; // Don't schedule another poll
+        }
+
         const currentHash = freshActive
           .map((j) => `${j.id}:${j.status}:${j.progress}`)
           .sort()
