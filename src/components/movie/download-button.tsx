@@ -52,9 +52,11 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
       j.status !== "completed" &&
       j.status !== "failed"
   );
+  // Only treat a job as completed if the S3 file still exists.
+  // After library deletion the S3 key is cleared but old jobs may linger.
   const completedJob = jobs.find(
     (j) =>
-      nzbFiles.some((f) => f.id === j.nzbFileId) &&
+      nzbFiles.some((f) => f.id === j.nzbFileId && f.s3Key) &&
       j.status === "completed"
   );
 
