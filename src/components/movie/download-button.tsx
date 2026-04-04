@@ -55,10 +55,18 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
   // Fetch NZB files for this movie
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     setIsChecking(true);
     checkAvailability(movie.id)
-      .then(setNzbFiles)
-      .finally(() => setIsChecking(false));
+      .then((files) => {
+        if (!cancelled) setNzbFiles(files);
+      })
+      .finally(() => {
+        if (!cancelled) setIsChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [user, movie.id, checkAvailability]);
 
   // Re-fetch when any job completes so s3Key is up to date
