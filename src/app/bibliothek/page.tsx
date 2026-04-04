@@ -80,24 +80,32 @@ function LibraryCard({
       )}
 
       {/* Poster */}
-      <Link
-        href={`/movie/${movie?.tmdbId || ""}`}
-        className="relative block aspect-[2/3] w-full overflow-hidden bg-muted"
-      >
-        {posterUrl ? (
-          <Image
-            src={posterUrl}
-            alt={movie?.titleDe || ""}
-            fill
-            className="object-cover transition-transform duration-200 group-hover:scale-105"
-            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-          />
-        ) : (
+      {movie?.tmdbId ? (
+        <Link
+          href={`/movie/${movie.tmdbId}`}
+          className="relative block aspect-[2/3] w-full overflow-hidden bg-muted"
+        >
+          {posterUrl ? (
+            <Image
+              src={posterUrl}
+              alt={movie?.titleDe || ""}
+              fill
+              className="object-cover transition-transform duration-200 group-hover:scale-105"
+              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <Film className="size-10 text-muted-foreground" />
+            </div>
+          )}
+        </Link>
+      ) : (
+        <div className="relative block aspect-[2/3] w-full overflow-hidden bg-muted">
           <div className="flex h-full w-full items-center justify-center">
             <Film className="size-10 text-muted-foreground" />
           </div>
-        )}
-      </Link>
+        </div>
+      )}
 
       <div className="p-3">
         <h3 className="truncate text-sm font-medium">
