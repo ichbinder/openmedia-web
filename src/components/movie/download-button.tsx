@@ -21,7 +21,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 
 interface DownloadButtonProps {
@@ -38,7 +37,9 @@ interface DownloadButtonProps {
 /** Resolution sort order — higher resolution first */
 const RES_ORDER = ["2160p", "1080p", "720p", "480p"];
 function resIndex(r: string | null): number {
-  return r ? RES_ORDER.indexOf(r) : 99;
+  if (!r) return 99;
+  const idx = RES_ORDER.indexOf(r);
+  return idx === -1 ? 98 : idx;
 }
 
 export function DownloadButton({ movie, className }: DownloadButtonProps) {
@@ -84,7 +85,8 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
   // ── Derived state ─────────────────────────────────────────
 
   // Filter out NZBs with 3+ failures (completely hidden)
-  const visibleFiles = nzbFiles.filter((f) => f.failedAttempts < 3);
+  // Defensive fallback: if failedAttempts is missing (old API), treat as 0
+  const visibleFiles = nzbFiles.filter((f) => (f.failedAttempts ?? 0) < 3);
 
   // Categorize
   const downloadedFiles = visibleFiles.filter((f) => f.s3Key);
@@ -129,8 +131,11 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
       return;
     }
     setStartingId(fileId);
-    await startDownload(fileId);
-    setStartingId(null);
+    try {
+      await startDownload(fileId);
+    } finally {
+      setStartingId(null);
+    }
   }
 
   async function handleCancelDownload(jobId: string) {
@@ -283,9 +288,9 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
         {/* Downloaded files */}
         {downloadedFiles.length > 0 && (
           <>
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
               Bereit zum Herunterladen
-            </DropdownMenuLabel>
+            </div>
             {downloadedFiles.map((file) => (
               <NzbDropdownItem
                 key={file.id}
@@ -305,9 +310,9 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
         {availableFiles.length > 0 && (
           <>
             {downloadedFiles.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
               Verfügbar
-            </DropdownMenuLabel>
+            </div>
             {availableFiles.map((file) => (
               <NzbDropdownItem
                 key={file.id}
@@ -329,9 +334,9 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
             {(downloadedFiles.length > 0 || availableFiles.length > 0) && (
               <DropdownMenuSeparator />
             )}
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
+            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
               Fehlerhaft
-            </DropdownMenuLabel>
+            </div>
             {brokenFiles.map((file) => (
               <NzbDropdownItem
                 key={file.id}
@@ -458,7 +463,7 @@ function NzbDropdownItem({
               : variant === "downloaded"
                 ? "bg-cinema-gold/20 text-cinema-gold"
                 : isStarting
-                  ? "bg-green-500/10 text-green-400"
+                  ? "bg-green-500/20 text-green-400"
                   : "bg-green-500/10 text-green-400"
           )}
         >
