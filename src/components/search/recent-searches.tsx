@@ -35,20 +35,26 @@ export function RecentSearches() {
   useEffect(() => {
     if (!user) {
       setItems([]);
+      setIsLoading(false);
       return;
     }
 
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+      setItems([]);
+      return;
+    }
 
     setIsLoading(true);
     getSearchHistory(token, 20)
       .then((res) => {
         if (res.ok && res.data?.items) {
           setItems(res.data.items);
+        } else {
+          setItems([]);
         }
       })
-      .catch(() => {})
+      .catch(() => setItems([]))
       .finally(() => setIsLoading(false));
   }, [user]);
 

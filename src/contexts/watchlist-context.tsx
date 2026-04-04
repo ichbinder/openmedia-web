@@ -41,23 +41,40 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setItems([]);
+      setIsLoading(false);
       return;
     }
 
     const token = getToken();
     if (!token) {
       setItems([]);
+      setIsLoading(false);
       return;
     }
 
+    const controller = new AbortController();
+    let active = true;
+
     setIsLoading(true);
     fetch(API_BASE, {
+      signal: controller.signal,
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : { items: [] }))
-      .then((data) => setItems(data.items ?? []))
-      .catch(() => setItems([]))
-      .finally(() => setIsLoading(false));
+      .then((data) => {
+        if (active) setItems(data.items ?? []);
+      })
+      .catch((err) => {
+        if (active && err.name !== "AbortError") setItems([]);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [user]);
 
   const add = useCallback(
