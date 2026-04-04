@@ -83,10 +83,14 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
       const token = getToken();
       if (!token) return;
 
-      // Optimistic update
+      // Track whether item was already present before optimistic add
+      let wasAlreadyPresent = false;
       const tempItem: WatchlistItem = { ...item, addedAt: new Date().toISOString() };
       setItems((prev) => {
-        if (prev.some((i) => i.movieId === item.movieId)) return prev;
+        if (prev.some((i) => i.movieId === item.movieId)) {
+          wasAlreadyPresent = true;
+          return prev;
+        }
         return [tempItem, ...prev];
       });
 
@@ -100,13 +104,14 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify(item),
         });
 
-        if (!res.ok) {
-          // Rollback on failure
+        if (!res.ok && !wasAlreadyPresent) {
+          // Rollback only the optimistically added item
           setItems((prev) => prev.filter((i) => i.movieId !== item.movieId));
         }
       } catch {
-        // Rollback on network error
-        setItems((prev) => prev.filter((i) => i.movieId !== item.movieId));
+        if (!wasAlreadyPresent) {
+          setItems((prev) => prev.filter((i) => i.movieId !== item.movieId));
+        }
       }
     },
     [user]
@@ -118,8 +123,8 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
       const token = getToken();
       if (!token) return;
 
-      // Optimistic remove
-      const previousItems = items;
+      // Capture only the removed item for targeted rollback
+      const removedItem = items.find((i) => i.movieId === movieId);
       setItems((prev) => prev.filter((i) => i.movieId !== movieId));
 
       try {
@@ -128,13 +133,18 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!res.ok) {
-          // Rollback on failure
-          setItems(previousItems);
+        if (!res.ok && removedItem) {
+          // Rollback: re-insert only the removed item
+          setItems((prev) =>
+            prev.some((i) => i.movieId === movieId) ? prev : [removedItem, ...prev]
+          );
         }
       } catch {
-        // Rollback on network error
-        setItems(previousItems);
+        if (removedItem) {
+          setItems((prev) =>
+            prev.some((i) => i.movieId === movieId) ? prev : [removedItem, ...prev]
+          );
+        }
       }
     },
     [user, items]
