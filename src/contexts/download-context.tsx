@@ -148,12 +148,14 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
   // ── Load jobs on login ───────────────────────────────────
   useEffect(() => {
+    let cancelled = false;
     if (user) {
       setIsLoading(true);
       // First fetch: populate prevStatusMap without triggering toasts
       const token = getToken();
       if (token) {
         getDownloadJobs(token).then((res) => {
+          if (cancelled) return;
           if (res.ok && res.data?.jobs) {
             const initialMap = new Map<string, string>();
             for (const job of res.data.jobs) {
@@ -163,7 +165,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
             setJobs(res.data.jobs);
           }
           setIsLoading(false);
-        }).catch(() => setIsLoading(false));
+        }).catch(() => {
+          if (!cancelled) setIsLoading(false);
+        });
       } else {
         setIsLoading(false);
       }
@@ -171,6 +175,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       setJobs([]);
       prevStatusMapRef.current = new Map();
     }
+    return () => { cancelled = true; };
   }, [user]);
 
   // ── Derived state ─────────────────────────────────────────
