@@ -132,25 +132,24 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
   // ── Fetch all jobs from API ──────────────────────────────
   // Side-effect-free: returns fresh jobs without touching state.
-  // Callers must apply notifyTransitions/setJobs after cancel checks.
-  const fetchJobsRaw = useCallback(async (): Promise<DownloadJob[]> => {
+  // Returns null on error/no-token, or DownloadJob[] (possibly empty) on success.
+  const fetchJobsRaw = useCallback(async (): Promise<DownloadJob[] | null> => {
     const token = getToken();
-    if (!token) return [];
+    if (!token) return null;
 
     const res = await getDownloadJobs(token);
     if (res.ok && res.data?.jobs) {
       return res.data.jobs;
     }
-    return [];
+    return null;
   }, []);
 
   // Convenience wrapper that applies side-effects (used by non-polling callers)
   const fetchJobs = useCallback(async (): Promise<DownloadJob[]> => {
     const freshJobs = await fetchJobsRaw();
-    if (freshJobs.length > 0) {
-      notifyTransitions(freshJobs);
-      setJobs(freshJobs);
-    }
+    if (freshJobs === null) return []; // error/no-token — don't touch state
+    notifyTransitions(freshJobs);
+    setJobs(freshJobs);
     return freshJobs;
   }, [fetchJobsRaw, notifyTransitions]);
 
@@ -216,11 +215,15 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         // Don't continue if effect was cleaned up during fetch
         if (cancelled) return;
 
-        // Apply side-effects only after cancel check
-        if (freshJobs.length > 0) {
-          notifyTransitions(freshJobs);
-          setJobs(freshJobs);
+        // null = error/no-token — skip this poll cycle
+        if (freshJobs === null) {
+          schedulePoll();
+          return;
         }
+
+        // Apply side-effects only after cancel check
+        notifyTransitions(freshJobs);
+        setJobs(freshJobs);
 
         // Compute hash from freshly fetched data (not stale closure)
         const freshActive = freshJobs.filter(
