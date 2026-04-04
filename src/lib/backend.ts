@@ -166,3 +166,34 @@ export async function getRetention(nzbFileId: string, token: string) {
     { token }
   );
 }
+
+// ── Search History ───────────────────────────────────────────
+
+export interface SearchHistoryItem {
+  id: string;
+  movieId: number;
+  title: string;
+  posterPath: string | null;
+  voteAverage: number;
+  releaseDate: string;
+  searchedAt: string;
+}
+
+export async function getSearchHistory(token: string, limit = 20) {
+  return backendFetch<{ items: SearchHistoryItem[] }>(`/search-history?limit=${limit}`, { token });
+}
+
+export async function addToSearchHistory(
+  item: { movieId: number; title: string; posterPath: string | null; voteAverage: number; releaseDate: string },
+  token: string
+) {
+  return backendFetch<{ item: SearchHistoryItem }>("/search-history", {
+    method: "POST",
+    body: JSON.stringify(item),
+    token,
+  });
+}
+
+export async function clearSearchHistory(token: string) {
+  return backendFetch("/search-history", { method: "DELETE", token });
+}

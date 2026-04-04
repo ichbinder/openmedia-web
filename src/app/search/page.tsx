@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { searchMovies } from "@/lib/tmdb";
-import { MovieGrid } from "@/components/movie/movie-grid";
 import { SearchInput } from "@/components/search/search-input";
+import { SearchMovieCard } from "@/components/search/search-movie-card";
+import { RecentSearches } from "@/components/search/recent-searches";
 
 interface SearchPageProps {
   searchParams: Promise<{ q?: string }>;
@@ -35,20 +36,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </Suspense>
       </div>
 
-      <SearchResults query={query} />
+      {query && query.length >= 2 ? (
+        <SearchResults query={query} />
+      ) : (
+        <Suspense>
+          <RecentSearches />
+        </Suspense>
+      )}
     </div>
   );
 }
 
 async function SearchResults({ query }: { query: string }) {
-  if (!query || query.length < 2) {
-    return (
-      <p className="text-muted-foreground">
-        Gib einen Suchbegriff ein, um Filme zu finden.
-      </p>
-    );
-  }
-
   const data = await searchMovies(query);
 
   if (data.results.length === 0) {
@@ -60,9 +59,15 @@ async function SearchResults({ query }: { query: string }) {
   }
 
   return (
-    <MovieGrid
-      movies={data.results}
-      heading={`Ergebnisse für \u201e${query}\u201c`}
-    />
+    <section>
+      <h2 className="mb-6 text-2xl font-bold tracking-tight text-foreground">
+        Ergebnisse für &bdquo;{query}&ldquo;
+      </h2>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {data.results.map((movie) => (
+          <SearchMovieCard key={movie.id} movie={movie} />
+        ))}
+      </div>
+    </section>
   );
 }

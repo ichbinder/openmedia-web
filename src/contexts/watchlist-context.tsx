@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { getToken } from "@/lib/auth";
 
 export interface WatchlistItem {
   movieId: number;
@@ -43,8 +44,16 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const token = getToken();
+    if (!token) {
+      setItems([]);
+      return;
+    }
+
     setIsLoading(true);
-    fetch(API_BASE)
+    fetch(API_BASE, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then((res) => (res.ok ? res.json() : { items: [] }))
       .then((data) => setItems(data.items ?? []))
       .catch(() => setItems([]))
@@ -54,6 +63,8 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   const add = useCallback(
     async (item: Omit<WatchlistItem, "addedAt">) => {
       if (!user) return;
+      const token = getToken();
+      if (!token) return;
 
       // Optimistic update
       const tempItem: WatchlistItem = { ...item, addedAt: new Date().toISOString() };
@@ -65,7 +76,10 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
       try {
         const res = await fetch(API_BASE, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify(item),
         });
 
@@ -84,13 +98,18 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   const remove = useCallback(
     async (movieId: number) => {
       if (!user) return;
+      const token = getToken();
+      if (!token) return;
 
       // Optimistic remove
       const previousItems = items;
       setItems((prev) => prev.filter((i) => i.movieId !== movieId));
 
       try {
-        const res = await fetch(`${API_BASE}/${movieId}`, { method: "DELETE" });
+        const res = await fetch(`${API_BASE}/${movieId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         if (!res.ok) {
           // Rollback on failure
