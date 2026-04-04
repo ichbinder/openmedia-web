@@ -180,7 +180,8 @@ export interface SearchHistoryItem {
 }
 
 export async function getSearchHistory(token: string, limit = 20) {
-  return backendFetch<{ items: SearchHistoryItem[] }>(`/search-history?limit=${limit}`, { token });
+  const safeLimit = Number.isFinite(limit) ? Math.min(50, Math.max(1, Math.trunc(limit))) : 20;
+  return backendFetch<{ items: SearchHistoryItem[] }>(`/search-history?limit=${safeLimit}`, { token });
 }
 
 export async function addToSearchHistory(
