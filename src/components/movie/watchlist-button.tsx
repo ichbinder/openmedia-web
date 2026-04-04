@@ -56,6 +56,7 @@ export function WatchlistButton({
     return (
       <button
         onClick={handleClick}
+        data-watchlist-button
         className={cn(
           "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors",
           inWatchlist
@@ -76,6 +77,7 @@ export function WatchlistButton({
   return (
     <button
       onClick={handleClick}
+      data-watchlist-button
       className={cn(
         "absolute right-2 top-2 z-10 flex size-8 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm transition-colors hover:bg-black/80",
         className

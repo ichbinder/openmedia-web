@@ -184,8 +184,8 @@ export async function getSearchHistory(token: string, limit = 20) {
 }
 
 export async function addToSearchHistory(
+  token: string,
   item: { movieId: number; title: string; posterPath: string | null; voteAverage: number; releaseDate: string },
-  token: string
 ) {
   return backendFetch<{ item: SearchHistoryItem }>("/search-history", {
     method: "POST",

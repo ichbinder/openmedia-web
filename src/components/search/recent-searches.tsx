@@ -56,9 +56,18 @@ export function RecentSearches() {
     const token = getToken();
     if (!token) return;
 
-    await clearSearchHistory(token);
+    const previousItems = items;
     setItems([]);
-  }, []);
+
+    try {
+      const res = await clearSearchHistory(token);
+      if (!res.ok) {
+        setItems(previousItems);
+      }
+    } catch {
+      setItems(previousItems);
+    }
+  }, [items]);
 
   if (!user) {
     return (
