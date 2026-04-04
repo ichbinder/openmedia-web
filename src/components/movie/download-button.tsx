@@ -45,17 +45,25 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
       .finally(() => setIsChecking(false));
   }, [user, movie.id, checkAvailability]);
 
-  // Re-fetch nzbFiles when a job for this movie completes so s3Key is current
-  const completedJobId = jobs.find(
-    (j) =>
-      nzbFiles.some((f) => f.id === j.nzbFileId) &&
-      j.status === "completed"
-  )?.id;
+  // Re-fetch nzbFiles when any job for this movie completes so s3Key is current
+  const completedJobIds = jobs
+    .filter(
+      (j) =>
+        nzbFiles.some((f) => f.id === j.nzbFileId) &&
+        j.status === "completed"
+    )
+    .map((j) => j.id)
+    .sort()
+    .join(",");
 
   useEffect(() => {
-    if (!completedJobId || !user) return;
-    checkAvailability(movie.id).then(setNzbFiles);
-  }, [completedJobId, user, movie.id, checkAvailability]);
+    if (!completedJobIds || !user) return;
+    let cancelled = false;
+    checkAvailability(movie.id).then((files) => {
+      if (!cancelled) setNzbFiles(files);
+    });
+    return () => { cancelled = true; };
+  }, [completedJobIds, user, movie.id, checkAvailability]);
 
   // Find active/completed job for any of this movie's NZB files
   const activeJob = jobs.find(
