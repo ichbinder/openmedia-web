@@ -131,29 +131,39 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── Fetch all jobs from API ──────────────────────────────
-  // Returns the fresh jobs array so callers can use it directly
-  // (avoids stale-closure issues with React state).
-  const fetchJobs = useCallback(async (): Promise<DownloadJob[]> => {
+  // Side-effect-free: returns fresh jobs without touching state.
+  // Callers must apply notifyTransitions/setJobs after cancel checks.
+  const fetchJobsRaw = useCallback(async (): Promise<DownloadJob[]> => {
     const token = getToken();
     if (!token) return [];
 
     const res = await getDownloadJobs(token);
     if (res.ok && res.data?.jobs) {
-      notifyTransitions(res.data.jobs);
-      setJobs(res.data.jobs);
       return res.data.jobs;
     }
     return [];
-  }, [notifyTransitions]);
+  }, []);
+
+  // Convenience wrapper that applies side-effects (used by non-polling callers)
+  const fetchJobs = useCallback(async (): Promise<DownloadJob[]> => {
+    const freshJobs = await fetchJobsRaw();
+    if (freshJobs.length > 0) {
+      notifyTransitions(freshJobs);
+      setJobs(freshJobs);
+    }
+    return freshJobs;
+  }, [fetchJobsRaw, notifyTransitions]);
 
   // ── Load jobs on login ───────────────────────────────────
   useEffect(() => {
+    let cancelled = false;
     if (user) {
       setIsLoading(true);
       // First fetch: populate prevStatusMap without triggering toasts
       const token = getToken();
       if (token) {
         getDownloadJobs(token).then((res) => {
+          if (cancelled) return;
           if (res.ok && res.data?.jobs) {
             const initialMap = new Map<string, string>();
             for (const job of res.data.jobs) {
@@ -163,14 +173,18 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
             setJobs(res.data.jobs);
           }
           setIsLoading(false);
-        }).catch(() => setIsLoading(false));
+        }).catch(() => {
+          if (!cancelled) setIsLoading(false);
+        });
       } else {
         setIsLoading(false);
       }
     } else {
       setJobs([]);
+      setIsLoading(false);
       prevStatusMapRef.current = new Map();
     }
+    return () => { cancelled = true; };
   }, [user]);
 
   // ── Derived state ─────────────────────────────────────────
@@ -197,10 +211,16 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
     const schedulePoll = () => {
       pollRef.current = setTimeout(async () => {
-        const freshJobs = await fetchJobs();
+        const freshJobs = await fetchJobsRaw();
 
         // Don't continue if effect was cleaned up during fetch
         if (cancelled) return;
+
+        // Apply side-effects only after cancel check
+        if (freshJobs.length > 0) {
+          notifyTransitions(freshJobs);
+          setJobs(freshJobs);
+        }
 
         // Compute hash from freshly fetched data (not stale closure)
         const freshActive = freshJobs.filter(
@@ -249,7 +269,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       if (pollRef.current) clearTimeout(pollRef.current);
     };
-  }, [hasActive, user, fetchJobs]);
+  }, [hasActive, user, fetchJobsRaw, notifyTransitions]);
 
   // ── Start a download ─────────────────────────────────────
   const startDownload = useCallback(
