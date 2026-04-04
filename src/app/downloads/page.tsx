@@ -31,18 +31,26 @@ function JobRow({ job }: { job: DownloadJob }) {
   return (
     <div className="flex items-center gap-4 rounded-lg border border-border/40 bg-card p-3">
       {/* Poster */}
-      <Link
-        href={`/movie/${movie?.tmdbId || ""}`}
-        className="relative h-16 w-11 shrink-0 overflow-hidden rounded bg-muted"
-      >
-        {posterUrl ? (
-          <Image src={posterUrl} alt={movie?.titleDe || ""} fill className="object-cover" sizes="44px" />
-        ) : (
+      {movie?.tmdbId ? (
+        <Link
+          href={`/movie/${movie.tmdbId}`}
+          className="relative h-16 w-11 shrink-0 overflow-hidden rounded bg-muted"
+        >
+          {posterUrl ? (
+            <Image src={posterUrl} alt={movie?.titleDe || ""} fill className="object-cover" sizes="44px" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <Film className="size-5 text-muted-foreground" />
+            </div>
+          )}
+        </Link>
+      ) : (
+        <div className="relative h-16 w-11 shrink-0 overflow-hidden rounded bg-muted">
           <div className="flex h-full w-full items-center justify-center">
             <Film className="size-5 text-muted-foreground" />
           </div>
-        )}
-      </Link>
+        </div>
+      )}
 
       {/* Info */}
       <div className="flex-1 min-w-0">
