@@ -130,7 +130,7 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
       return;
     }
     const url = await getLink(fileId);
-    if (url) window.open(url, "_blank");
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function handleStartDownload(fileId: string) {
