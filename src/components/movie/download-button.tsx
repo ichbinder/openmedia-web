@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Download,
   Loader2,
@@ -112,14 +112,19 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
   availableFiles.sort(sortByRes);
   brokenFiles.sort(sortByRes);
 
-  // Get active job for a specific NZB file
+  // Memoized index: nzbFileId → active DownloadJob (O(1) lookups)
+  const activeJobsByFileId = useMemo(() => {
+    const map = new Map<string, DownloadJob>();
+    for (const j of jobs) {
+      if (j.status !== "completed" && j.status !== "failed") {
+        map.set(j.nzbFileId, j);
+      }
+    }
+    return map;
+  }, [jobs]);
+
   function getActiveJob(nzbFileId: string): DownloadJob | undefined {
-    return jobs.find(
-      (j) =>
-        j.nzbFileId === nzbFileId &&
-        j.status !== "completed" &&
-        j.status !== "failed"
-    );
+    return activeJobsByFileId.get(nzbFileId);
   }
 
   // ── Handlers ──────────────────────────────────────────────
@@ -129,8 +134,12 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
       router.push("/login");
       return;
     }
-    const url = await getLink(fileId);
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
+    try {
+      const url = await getLink(fileId);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      // Network error — download context handles toast notifications
+    }
   }
 
   async function handleStartDownload(fileId: string) {
@@ -286,8 +295,8 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
         )}
         {hasSomeDownloaded
           ? "Herunterladen"
-          : hasSomeActive
-            ? getStatusLabel(bestActiveJob!.status)
+          : hasSomeActive && bestActiveJob
+            ? getStatusLabel(bestActiveJob.status)
             : "Verfügbar machen"}
         <ChevronDown className="size-3.5 opacity-60" />
       </DropdownMenuTrigger>
