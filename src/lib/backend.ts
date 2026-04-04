@@ -92,6 +92,9 @@ export interface NzbFileInfo {
   s3Key: string | null;
   fileExtension: string | null;
   downloadedAt: string | null;
+  status: "ok" | "broken" | "untested";
+  brokenReason: string | null;
+  failedAttempts: number;
 }
 
 export interface NzbMovieInfo {
