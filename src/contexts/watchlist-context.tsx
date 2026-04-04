@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { getToken } from "@/lib/auth";
 
 export interface WatchlistItem {
   movieId: number;
@@ -40,42 +41,77 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setItems([]);
+      setIsLoading(false);
       return;
     }
 
+    const token = getToken();
+    if (!token) {
+      setItems([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+
     setIsLoading(true);
-    fetch(API_BASE)
+    fetch(API_BASE, {
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then((res) => (res.ok ? res.json() : { items: [] }))
-      .then((data) => setItems(data.items ?? []))
-      .catch(() => setItems([]))
-      .finally(() => setIsLoading(false));
+      .then((data) => {
+        if (active) setItems(data.items ?? []);
+      })
+      .catch((err) => {
+        if (active && err.name !== "AbortError") setItems([]);
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [user]);
 
   const add = useCallback(
     async (item: Omit<WatchlistItem, "addedAt">) => {
       if (!user) return;
+      const token = getToken();
+      if (!token) return;
 
-      // Optimistic update
+      // Track whether item was already present before optimistic add
+      let wasAlreadyPresent = false;
       const tempItem: WatchlistItem = { ...item, addedAt: new Date().toISOString() };
       setItems((prev) => {
-        if (prev.some((i) => i.movieId === item.movieId)) return prev;
+        if (prev.some((i) => i.movieId === item.movieId)) {
+          wasAlreadyPresent = true;
+          return prev;
+        }
         return [tempItem, ...prev];
       });
 
       try {
         const res = await fetch(API_BASE, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify(item),
         });
 
-        if (!res.ok) {
-          // Rollback on failure
+        if (!res.ok && !wasAlreadyPresent) {
+          // Rollback only the optimistically added item
           setItems((prev) => prev.filter((i) => i.movieId !== item.movieId));
         }
       } catch {
-        // Rollback on network error
-        setItems((prev) => prev.filter((i) => i.movieId !== item.movieId));
+        if (!wasAlreadyPresent) {
+          setItems((prev) => prev.filter((i) => i.movieId !== item.movieId));
+        }
       }
     },
     [user]
@@ -84,21 +120,31 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   const remove = useCallback(
     async (movieId: number) => {
       if (!user) return;
+      const token = getToken();
+      if (!token) return;
 
-      // Optimistic remove
-      const previousItems = items;
+      // Capture only the removed item for targeted rollback
+      const removedItem = items.find((i) => i.movieId === movieId);
       setItems((prev) => prev.filter((i) => i.movieId !== movieId));
 
       try {
-        const res = await fetch(`${API_BASE}/${movieId}`, { method: "DELETE" });
+        const res = await fetch(`${API_BASE}/${movieId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-        if (!res.ok) {
-          // Rollback on failure
-          setItems(previousItems);
+        if (!res.ok && removedItem) {
+          // Rollback: re-insert only the removed item
+          setItems((prev) =>
+            prev.some((i) => i.movieId === movieId) ? prev : [removedItem, ...prev]
+          );
         }
       } catch {
-        // Rollback on network error
-        setItems(previousItems);
+        if (removedItem) {
+          setItems((prev) =>
+            prev.some((i) => i.movieId === movieId) ? prev : [removedItem, ...prev]
+          );
+        }
       }
     },
     [user, items]
