@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getMovieDetails } from "@/lib/tmdb";
 import { MovieDetailHero } from "@/components/movie/movie-detail-hero";
+import { MovieHeroWithPlayer } from "@/components/movie/movie-hero-with-player";
 import { MovieActions } from "@/components/movie/movie-actions";
 import { CastList } from "@/components/movie/cast-list";
 import { TrailerSection } from "@/components/movie/trailer-section";
@@ -60,7 +61,9 @@ export default async function MovieDetailPage({ params }: MoviePageProps) {
 
   return (
     <main>
-      <MovieDetailHero movie={movie} />
+      <MovieHeroWithPlayer movie={movie}>
+        <MovieDetailHero movie={movie} />
+      </MovieHeroWithPlayer>
       <MovieActions
         movie={{
           id: movie.id,
