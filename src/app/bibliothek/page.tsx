@@ -129,7 +129,7 @@ function LibraryCard({
         {/* Action buttons */}
         <div className="mt-2 flex gap-2">
           {/* Stream button — navigates to movie detail page with auto-play */}
-          {movie?.tmdbId && item.nzbFile.s3Key && (
+          {movie?.tmdbId && item.nzbFile.s3StreamKey && (
             <Link
               href={`/movie/${movie.tmdbId}#play`}
               className="flex items-center justify-center rounded-md bg-cinema-gold px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90"
