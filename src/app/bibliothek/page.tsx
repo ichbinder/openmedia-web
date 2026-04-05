@@ -16,6 +16,7 @@ import {
 import {
   Library,
   Download,
+  Play,
   Trash2,
   Film,
   Loader2,
@@ -127,10 +128,21 @@ function LibraryCard({
 
         {/* Action buttons */}
         <div className="mt-2 flex gap-2">
+          {/* Stream button — navigates to movie detail page with auto-play */}
+          {movie?.tmdbId && item.nzbFile.s3Key && (
+            <Link
+              href={`/movie/${movie.tmdbId}#play`}
+              className="flex items-center justify-center rounded-md bg-cinema-gold px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90"
+              title="Film abspielen"
+            >
+              <Play className="size-3.5 fill-black" />
+            </Link>
+          )}
+
           <button
             onClick={handleDownload}
             disabled={isDownloading}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-cinema-gold px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90 disabled:opacity-50"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-cinema-gold/20 px-3 py-1.5 text-sm font-medium text-cinema-gold transition-colors hover:bg-cinema-gold/30 disabled:opacity-50"
           >
             {isDownloading ? (
               <Loader2 className="size-3.5 animate-spin" />
