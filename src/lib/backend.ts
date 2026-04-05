@@ -90,6 +90,7 @@ export interface NzbFileInfo {
   hash: string;
   resolution: string | null;
   s3Key: string | null;
+  s3StreamKey: string | null;
   fileExtension: string | null;
   downloadedAt: string | null;
   status: "ok" | "broken" | "untested";
@@ -119,6 +120,10 @@ export interface DownloadLink {
 
 export async function getDownloadLink(nzbFileId: string, token: string, expires = "7d") {
   return backendFetch<DownloadLink>(`/nzb/files/${nzbFileId}/download-link?expires=${expires}`, { token });
+}
+
+export async function getStreamLink(nzbFileId: string, token: string, expires = "7d") {
+  return backendFetch<DownloadLink>(`/nzb/files/${nzbFileId}/stream-link?expires=${expires}`, { token });
 }
 
 // ── Library ──────────────────────────────────────────────────
