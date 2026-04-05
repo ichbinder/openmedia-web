@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Play, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
 import { useDownloads } from "@/contexts/download-context";
 import { VideoPlayer } from "@/components/movie/video-player";
@@ -30,8 +31,9 @@ export function MovieHeroWithPlayer({
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
 
   // Check if this movie has a streamable file in the user's library
+  const userId = user?.id;
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setStreamableFileId(null);
       return;
     }
@@ -39,28 +41,36 @@ export function MovieHeroWithPlayer({
     let cancelled = false;
     setIsCheckingAvailability(true);
 
-    checkAvailability(movie.id).then((files) => {
-      if (cancelled) return;
+    checkAvailability(movie.id)
+      .then((files) => {
+        if (cancelled) return;
 
-      // Find the best file with an s3Key (already downloaded to S3)
-      // Prefer highest resolution
-      const RES_ORDER = ["2160p", "1080p", "720p", "480p"];
-      const streamable = files
-        .filter((f) => f.s3Key)
-        .sort((a, b) => {
-          const ai = a.resolution ? RES_ORDER.indexOf(a.resolution) : 99;
-          const bi = b.resolution ? RES_ORDER.indexOf(b.resolution) : 99;
-          return (ai === -1 ? 98 : ai) - (bi === -1 ? 98 : bi);
-        });
+        // Find the best file with an s3Key (already downloaded to S3)
+        // Prefer highest resolution
+        const RES_ORDER = ["2160p", "1080p", "720p", "480p"];
+        const streamable = files
+          .filter((f) => f.s3Key)
+          .sort((a, b) => {
+            const ai = a.resolution ? RES_ORDER.indexOf(a.resolution) : 99;
+            const bi = b.resolution ? RES_ORDER.indexOf(b.resolution) : 99;
+            return (ai === -1 ? 98 : ai) - (bi === -1 ? 98 : bi);
+          });
 
-      setStreamableFileId(streamable[0]?.id ?? null);
-      setIsCheckingAvailability(false);
-    });
+        setStreamableFileId(streamable[0]?.id ?? null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("[MovieHeroWithPlayer] Availability check failed:", err);
+        setStreamableFileId(null);
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingAvailability(false);
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [user, movie.id, checkAvailability]);
+  }, [userId, movie.id, checkAvailability]);
 
   // Auto-play when navigated with #play hash (from library page)
   useEffect(() => {
@@ -70,7 +80,7 @@ export function MovieHeroWithPlayer({
       // Clean hash from URL without triggering navigation
       window.history.replaceState(null, "", window.location.pathname);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally omit handlePlay/isPlaying to trigger auto-play only once when streamableFileId becomes available
   }, [streamableFileId]);
 
   const handlePlay = useCallback(async () => {
@@ -82,9 +92,16 @@ export function MovieHeroWithPlayer({
       if (url) {
         setStreamUrl(url);
         setIsPlaying(true);
+      } else {
+        toast.error("Stream konnte nicht gestartet werden", {
+          description: "Der Download-Link konnte nicht abgerufen werden.",
+        });
       }
     } catch (err) {
       console.error("[MovieHeroWithPlayer] Failed to get stream URL:", err);
+      toast.error("Stream fehlgeschlagen", {
+        description: "Bitte versuche es später erneut.",
+      });
     } finally {
       setIsLoadingStream(false);
     }

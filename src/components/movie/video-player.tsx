@@ -17,6 +17,19 @@ import { X } from "lucide-react";
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
 
+/** Derive MIME type from the URL path/extension. Falls back to video/mp4. */
+function getMimeType(url: string): "video/mp4" | "video/webm" | "video/ogg" | "video/avi" {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    if (pathname.endsWith(".webm")) return "video/webm";
+    if (pathname.endsWith(".ogg") || pathname.endsWith(".ogv")) return "video/ogg";
+    if (pathname.endsWith(".avi")) return "video/avi";
+  } catch {
+    // Presigned URLs may have complex query strings — fallback is fine
+  }
+  return "video/mp4";
+}
+
 interface VideoPlayerProps {
   /** Presigned S3 URL for the video */
   src: string;
@@ -84,7 +97,7 @@ export function VideoPlayer({
 
       <MediaPlayer
         ref={playerRef}
-        src={{ src, type: "video/mp4" }}
+        src={{ src, type: getMimeType(src) }}
         title={title}
         autoPlay={autoPlay}
         playsInline
