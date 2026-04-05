@@ -2,16 +2,14 @@
 
 Next.js Frontend für die OpenMedia Film-Plattform.
 
-> 📚 **Gesamtdokumentation:** [openmedia-docs](https://github.com/ichbinder/openmedia-docs)
-
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router, React 19)
 - **UI:** shadcn/ui + Tailwind CSS v4
 - **Theme:** Dunkles Cinema-Theme (oklch)
 - **Daten:** TMDB API (serverseitig) + openmedia-api (via Proxy)
-- **Auth:** JWT via httpOnly Cookie
-- **Tests:** Vitest (10) + Playwright E2E (10)
+- **Auth:** JWT in localStorage
+- **Tests:** Vitest (10 Tests)
 
 ## Architektur
 
@@ -21,13 +19,12 @@ Browser ──▶ openmedia-web ──Proxy──▶ openmedia-api
            TMDB API (Filme, Bilder)
 ```
 
-Der Proxy (`/api/backend/*`) leitet Requests an openmedia-api weiter und handelt JWT-Cookies automatisch.
+Der Proxy (`/api/backend/*` in `next.config.ts`) leitet Requests an openmedia-api weiter. Auth-Token wird in localStorage gespeichert und als Bearer-Header mitgeschickt.
 
 ## Setup
 
 ```bash
 npm install
-npx playwright install chromium  # für E2E-Tests
 npm run dev   # → http://localhost:3000
 ```
 
@@ -36,37 +33,56 @@ npm run dev   # → http://localhost:3000
 | Route | Beschreibung |
 |---|---|
 | `/` | Trending-Startseite mit Hero-Banner |
-| `/search` | Filmsuche mit Debounce |
+| `/search` | Filmsuche mit Debounce + Suchhistorie (zuletzt angeklickte Filme) |
 | `/genres` | Genre-Übersicht + gefilterte Grids |
-| `/movie/[id]` | Film-Detail (Cast, Trailer, ähnliche Filme) |
+| `/movie/[id]` | Film-Detail (Cast, Trailer, ähnliche Filme, Download-Button) |
 | `/login` | Anmelden |
 | `/register` | Registrieren |
 | `/watchlist` | Persönliche Watchlist |
-| `/downloads` | Bereitstellungen (Mock) |
-| `/bibliothek` | Persönliche Bibliothek (Mock) |
+| `/downloads` | Download-Status (Live-Polling, Fortschrittsanzeige) |
+| `/bibliothek` | Persönliche Bibliothek mit Presigned Download-Links |
+
+## Features
+
+### Suchhistorie
+- Filme die in den Suchergebnissen angeklickt werden, werden in der DB gespeichert
+- Suchseite zeigt "Zuletzt angesehen" Grid wenn kein Query aktiv
+- Max. 50 Einträge pro User, Auto-Trim
+- "Verlauf löschen" Button
+
+### Watchlist
+- Filme per Herz-Icon zur Watchlist hinzufügen/entfernen
+- Optimistisches UI mit per-Item Rollback bei API-Fehler
+- AbortController für Race-Condition-Schutz
+
+### Downloads
+- Live-Polling mit adaptivem Intervall (3s–15s, Backoff)
+- Toast-Notifications bei Status-Änderungen
+- Poster + Filmtitel + Fortschrittsbalken
+- Download-Link für abgeschlossene Jobs
 
 ## Tests
 
 ```bash
-npm test          # 10 Unit Tests (Vitest)
-npm run test:e2e  # 10 E2E Tests (Playwright)
+npm test    # 10 Unit Tests (Vitest)
 ```
 
 ## Umgebungsvariablen
 
-| Variable | Beschreibung |
-|---|---|
-| `TMDB_API_KEY` | TMDB API Key |
-| `BACKEND_URL` | openmedia-api URL (default: `http://localhost:4000`) |
+| Variable | Beschreibung | Hinweis |
+|---|---|---|
+| `TMDB_API_KEY` | TMDB API Key | **Build-Arg** (wird zur Build-Zeit eingebaked) |
+| `BACKEND_URL` | openmedia-api URL | **Build-Arg** (default: `http://localhost:4000`) |
 
 ## Docker Deployment
 
 ```bash
-docker build -t openmedia-web .
-docker run -p 3000:3000 \
-  -e TMDB_API_KEY=your-key \
-  -e BACKEND_URL=https://api.mediatoken.de \
-  openmedia-web
+docker build \
+  --build-arg BACKEND_URL=http://api:4000 \
+  --build-arg TMDB_API_KEY=your-key \
+  -t openmedia-web .
 ```
 
-Production: Läuft hinter Caddy Reverse Proxy auf `mediatoken.de`.
+**Wichtig:** `BACKEND_URL` und `TMDB_API_KEY` müssen als Docker Build-Args übergeben werden — Next.js evaluiert `process.env` zur Build-Zeit.
+
+Production: Läuft hinter Caddy Reverse Proxy auf `https://mediatoken.de`.
