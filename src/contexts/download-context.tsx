@@ -21,6 +21,7 @@ import {
   deleteDownloadJob,
   getNzbMovieByTmdb,
   getDownloadLink,
+  getStreamLink as getStreamLinkApi,
 } from "@/lib/backend";
 
 // ── Constants ────────────────────────────────────────────────
@@ -64,8 +65,10 @@ interface DownloadContextValue {
   getJobForFile: (nzbFileId: string) => DownloadJob | undefined;
   /** Check if a TMDB movie has NZB files available */
   checkAvailability: (tmdbId: number) => Promise<NzbFileInfo[]>;
-  /** Get presigned download URL for an NZB file */
+  /** Get presigned download URL for an NZB file (original) */
   getLink: (nzbFileId: string) => Promise<string | null>;
+  /** Get presigned stream URL for an NZB file (browser-compatible MP4) */
+  getStreamUrl: (nzbFileId: string) => Promise<string | null>;
   /** Number of active (non-terminal) jobs */
   activeCount: number;
   /** Jobs that are completed (ready for download) */
@@ -323,13 +326,28 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  // ── Get presigned download link ──────────────────────────
+  // ── Get presigned download link (original file) ───────────
   const getLink = useCallback(
     async (nzbFileId: string): Promise<string | null> => {
       const token = getToken();
       if (!token) return null;
 
       const res = await getDownloadLink(nzbFileId, token);
+      if (res.ok && res.data?.url) {
+        return res.data.url;
+      }
+      return null;
+    },
+    []
+  );
+
+  // ── Get presigned stream link (browser-compatible MP4) ───
+  const getStreamUrl = useCallback(
+    async (nzbFileId: string): Promise<string | null> => {
+      const token = getToken();
+      if (!token) return null;
+
+      const res = await getStreamLinkApi(nzbFileId, token);
       if (res.ok && res.data?.url) {
         return res.data.url;
       }
@@ -353,6 +371,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         getJobForFile,
         checkAvailability,
         getLink,
+        getStreamUrl,
         activeCount,
         completedJobs,
         isLoading,

@@ -20,13 +20,13 @@ export function MovieHeroWithPlayer({
   children,
 }: MovieHeroWithPlayerProps) {
   const { user } = useAuth();
-  const { checkAvailability, getLink } = useDownloads();
+  const { checkAvailability, getStreamUrl } = useDownloads();
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [isLoadingStream, setIsLoadingStream] = useState(false);
 
-  // Track the best available file (with s3Key) for this movie
+  // Track the best available file (with s3StreamKey) for this movie
   const [streamableFileId, setStreamableFileId] = useState<string | null>(null);
   const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
 
@@ -45,11 +45,11 @@ export function MovieHeroWithPlayer({
       .then((files) => {
         if (cancelled) return;
 
-        // Find the best file with an s3Key (already downloaded to S3)
+        // Find the best file with a stream version (s3StreamKey = browser-compatible MP4)
         // Prefer highest resolution
         const RES_ORDER = ["2160p", "1080p", "720p", "480p"];
         const streamable = files
-          .filter((f) => f.s3Key)
+          .filter((f) => f.s3StreamKey)
           .sort((a, b) => {
             const ai = a.resolution ? RES_ORDER.indexOf(a.resolution) : 99;
             const bi = b.resolution ? RES_ORDER.indexOf(b.resolution) : 99;
@@ -88,7 +88,7 @@ export function MovieHeroWithPlayer({
 
     setIsLoadingStream(true);
     try {
-      const url = await getLink(streamableFileId);
+      const url = await getStreamUrl(streamableFileId);
       if (url) {
         setStreamUrl(url);
         setIsPlaying(true);
@@ -105,7 +105,7 @@ export function MovieHeroWithPlayer({
     } finally {
       setIsLoadingStream(false);
     }
-  }, [streamableFileId, isLoadingStream, getLink]);
+  }, [streamableFileId, isLoadingStream, getStreamUrl]);
 
   const handleClose = useCallback(() => {
     setIsPlaying(false);
