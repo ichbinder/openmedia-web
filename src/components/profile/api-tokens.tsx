@@ -98,6 +98,7 @@ export function ApiTokenManager() {
   async function handleCreate() {
     if (!newName.trim()) return;
     setCreating(true);
+    setError(null);
     try {
       const res = await fetch("/api/backend/auth/api-tokens", {
         method: "POST",
@@ -122,6 +123,8 @@ export function ApiTokenManager() {
   }
 
   async function handleRevoke(id: string) {
+    const confirmed = window.confirm("Token wirklich widerrufen? Dies kann nicht rückgängig gemacht werden.");
+    if (!confirmed) return;
     setDeletingId(id);
     try {
       const res = await fetch(`/api/backend/auth/api-tokens/${id}`, { method: "DELETE" });
@@ -138,11 +141,14 @@ export function ApiTokenManager() {
     }
   }
 
-  function handleCopy() {
-    if (plaintextToken) {
-      navigator.clipboard.writeText(plaintextToken);
+  async function handleCopy() {
+    if (!plaintextToken) return;
+    try {
+      await navigator.clipboard.writeText(plaintextToken);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Token konnte nicht kopiert werden. Bitte manuell markieren und kopieren.");
     }
   }
 
