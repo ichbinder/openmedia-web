@@ -84,24 +84,38 @@ export async function logoutUser(): Promise<void> {
   clearToken();
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+export interface SessionResult {
+  user: AuthUser | null;
+  /** True if there was a token/cookie but the server rejected it (expired/invalid). */
+  wasRejected: boolean;
+}
+
+export async function getCurrentUser(): Promise<SessionResult> {
   const token = getToken();
-  if (!token) return null;
 
   try {
-    const res = await fetch(`${API_BASE}/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    // Call /auth/me — the proxy uses the httpOnly cookie if no Bearer token is sent
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE}/me`, { headers });
+
+    if (res.status === 401) {
+      // Server rejected — session expired or token invalid
+      if (token) clearToken();
+      return { user: null, wasRejected: true };
+    }
 
     if (!res.ok) {
-      clearToken();
-      return null;
+      return { user: null, wasRejected: false };
     }
 
     const json = await res.json();
-    return json.user ?? null;
+    return { user: json.user ?? null, wasRejected: false };
   } catch {
-    return null;
+    return { user: null, wasRejected: false };
   }
 }
 
