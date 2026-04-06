@@ -53,10 +53,13 @@ export function Header() {
           <div className="ml-2 border-l border-border/40 pl-2">
             {user ? (
               <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
                   <User className="size-4" />
                   {user.name}
-                </span>
+                </Link>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -112,10 +115,16 @@ export function Header() {
               <div className="mt-2 border-t border-border/40 pt-2">
                 {user ? (
                   <>
-                    <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-                      <User className="size-4" />
-                      {user.name}
-                    </div>
+                    <SheetClose render={<span />}>
+                      <Link
+                        href="/profile"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                        onClick={() => setOpen(false)}
+                      >
+                        <User className="size-4" />
+                        {user.name}
+                      </Link>
+                    </SheetClose>
                     <SheetClose render={<span />}>
                       <button
                         onClick={() => {
