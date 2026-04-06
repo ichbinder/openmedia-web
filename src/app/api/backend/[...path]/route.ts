@@ -46,31 +46,39 @@ async function proxyRequest(req: NextRequest, { params }: { params: Promise<{ pa
     const backendRes = await fetch(url, fetchOptions);
     const data = await backendRes.json();
 
-    const response = NextResponse.json(data, { status: backendRes.status });
+    const headers = new Headers({ "Content-Type": "application/json" });
 
-    // On 401 from backend: clear stale cookie so client knows session is gone
-    if (backendRes.status === 401 && token) {
-      response.cookies.delete(COOKIE_NAME);
-    }
-
-    // Handle auth responses — set/clear cookie
+    // Handle auth responses — set/clear cookie via Set-Cookie header
     if (backendPath === "auth/login" || backendPath === "auth/register") {
       if (backendRes.ok && data.token) {
-        response.cookies.set(COOKIE_NAME, data.token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: 60 * 60 * 24 * 7, // 7 days
-        });
+        const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+        const maxAge = 60 * 60 * 24 * 7; // 7 days
+        headers.set(
+          "Set-Cookie",
+          `${COOKIE_NAME}=${data.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`
+        );
       }
     }
 
-    if (backendPath === "auth/logout") {
-      response.cookies.delete(COOKIE_NAME);
+    // On 401 from backend: clear stale cookie
+    if (backendRes.status === 401 && token) {
+      headers.set(
+        "Set-Cookie",
+        `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+      );
     }
 
-    return response;
+    if (backendPath === "auth/logout") {
+      headers.set(
+        "Set-Cookie",
+        `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+      );
+    }
+
+    return new Response(JSON.stringify(data), {
+      status: backendRes.status,
+      headers,
+    });
   } catch (err) {
     console.error(`[proxy] Error forwarding to ${url}:`, err);
     return NextResponse.json(
