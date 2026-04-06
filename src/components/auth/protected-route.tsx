@@ -15,7 +15,7 @@ export function ProtectedRoute({
   children,
   message = "Du musst eingeloggt sein, um diesen Bereich zu sehen.",
 }: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, sessionExpired } = useAuth();
 
   if (isLoading) {
     return (
@@ -29,8 +29,12 @@ export function ProtectedRoute({
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
         <LogIn className="size-12 text-muted-foreground" />
-        <h2 className="text-xl font-semibold">Anmeldung erforderlich</h2>
-        <p className="max-w-md text-muted-foreground">{message}</p>
+        <h2 className="text-xl font-semibold">
+          {sessionExpired ? "Sitzung abgelaufen" : "Anmeldung erforderlich"}
+        </h2>
+        <p className="max-w-md text-muted-foreground">
+          {sessionExpired ? "Deine Sitzung ist abgelaufen. Bitte melde dich erneut an." : message}
+        </p>
         <div className="flex gap-3">
           <Link href="/login" className={buttonVariants()}>
             Anmelden

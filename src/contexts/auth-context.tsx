@@ -17,11 +17,13 @@ import {
   loginUser,
   logoutUser,
   getCurrentUser,
+  clearIfExpired,
 } from "@/lib/auth";
 
 interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
+  sessionExpired: boolean;
   login: (credentials: AuthCredentials) => Promise<AuthResult>;
   register: (data: RegisterData) => Promise<AuthResult>;
   logout: () => Promise<void>;
@@ -32,9 +34,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // Restore session from cookie on mount — calls /api/backend/auth/me
   useEffect(() => {
+    // Check if token is expired before even hitting the API
+    const wasExpired = clearIfExpired();
+    if (wasExpired) {
+      setSessionExpired(true);
+      setIsLoading(false);
+      return;
+    }
+
     getCurrentUser()
       .then((u) => setUser(u))
       .finally(() => setIsLoading(false));
@@ -44,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await loginUser(credentials);
     if (result.success) {
       setUser(result.user);
+      setSessionExpired(false);
     }
     return result;
   }, []);
@@ -62,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, sessionExpired, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
