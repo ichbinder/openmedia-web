@@ -38,16 +38,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Restore session from cookie on mount — calls /api/backend/auth/me
   useEffect(() => {
-    // Check if token is expired before even hitting the API
-    const wasExpired = clearIfExpired();
-    if (wasExpired) {
-      setSessionExpired(true);
-      setIsLoading(false);
-      return;
-    }
+    // Check localStorage token expiry (fast, no network)
+    clearIfExpired();
 
+    // Try the API — covers both localStorage token and httpOnly cookie
     getCurrentUser()
-      .then((u) => setUser(u))
+      .then(({ user: u, wasRejected }) => {
+        if (u) {
+          setUser(u);
+        } else if (wasRejected) {
+          // Had a session (token or cookie) but server said 401
+          setSessionExpired(true);
+        }
+      })
       .finally(() => setIsLoading(false));
   }, []);
 
