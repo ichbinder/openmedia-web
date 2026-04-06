@@ -48,6 +48,11 @@ async function proxyRequest(req: NextRequest, { params }: { params: Promise<{ pa
 
     const response = NextResponse.json(data, { status: backendRes.status });
 
+    // On 401 from backend: clear stale cookie so client knows session is gone
+    if (backendRes.status === 401 && token) {
+      response.cookies.delete(COOKIE_NAME);
+    }
+
     // Handle auth responses — set/clear cookie
     if (backendPath === "auth/login" || backendPath === "auth/register") {
       if (backendRes.ok && data.token) {
