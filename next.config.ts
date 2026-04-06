@@ -10,15 +10,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  async rewrites() {
-    const backendUrl = process.env.BACKEND_URL || "http://localhost:4000";
-    return [
-      {
-        source: "/api/backend/:path*",
-        destination: `${backendUrl}/:path*`,
-      },
-    ];
-  },
+  // NOTE: No rewrites for /api/backend/* — the Route Handler in
+  // src/app/api/backend/[...path]/route.ts handles proxying to Express
+  // and manages httpOnly cookies for auth. A rewrite would bypass it.
 };
 
 export default nextConfig;
