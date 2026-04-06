@@ -104,3 +104,25 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     return null;
   }
 }
+
+/**
+ * Check if a stored token exists but is expired (JWT exp claim in the past).
+ * Returns true if there was a token that got cleared — signals "session expired".
+ */
+export function clearIfExpired(): boolean {
+  const token = getToken();
+  if (!token) return false;
+
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      clearToken();
+      return true;
+    }
+  } catch {
+    // Malformed token — clear it
+    clearToken();
+    return true;
+  }
+  return false;
+}
