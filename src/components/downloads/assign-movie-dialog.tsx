@@ -27,11 +27,37 @@ interface AssignMovieDialogProps {
   /** Optional hint shown above the search input — e.g. the original NZB filename. */
   hint?: {
     filename?: string;
-    parsedTitle?: string;
-    parsedYear?: number | null;
   };
   /** Called after a successful assignment so the parent can refresh the job list. */
   onAssigned: () => void;
+}
+
+/**
+ * Heuristic: pull a candidate movie title out of an NZB filename like
+ * "The.Matrix.1999.1080p.BluRay.x264-GROUP.nzb". Strips known release
+ * markers (resolution, source, codec, year, group) and converts dots to
+ * spaces. Falls back to the raw stem if nothing recognizable is found.
+ *
+ * Returns an empty string when no useful candidate can be extracted.
+ */
+function guessTitleFromFilename(filename: string): string {
+  // Strip the .nzb extension
+  let name = filename.replace(/\.nzb$/i, "");
+
+  // Cut everything from the first 4-digit year (e.g. ".1999.") onward —
+  // that's where the release metadata starts.
+  const yearMatch = name.match(/\.(19\d{2}|20\d{2})\./);
+  if (yearMatch && yearMatch.index !== undefined) {
+    name = name.slice(0, yearMatch.index);
+  } else {
+    // No year? Strip common release markers as a fallback.
+    name = name.replace(
+      /\.(1080p|2160p|720p|480p|BluRay|WEBRip|WEB-DL|x264|x265|HEVC|HDR|REPACK|PROPER|MULTi|GERMAN|AC3|DTS).*$/i,
+      "",
+    );
+  }
+
+  return name.replace(/[._]+/g, " ").trim();
 }
 
 /**
@@ -58,10 +84,14 @@ export function AssignMovieDialog({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
 
-  // Pre-populate the search with the parsed title hint when the dialog opens.
+  // Pre-populate the search with a guess derived from the NZB filename
+  // when the dialog opens — saves the user from typing in 80% of cases.
   useEffect(() => {
-    if (open && hint?.parsedTitle && !query) {
-      setQuery(hint.parsedTitle);
+    if (open && hint?.filename && !query) {
+      const guess = guessTitleFromFilename(hint.filename);
+      if (guess.length >= 2) {
+        setQuery(guess);
+      }
     }
     // Reset state when the dialog closes so re-opening starts fresh.
     if (!open) {
@@ -169,23 +199,15 @@ export function AssignMovieDialog({
         </DialogHeader>
 
         {/* NZB hint block */}
-        {(hint?.filename || hint?.parsedTitle) && (
+        {hint?.filename && (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs space-y-1">
             <div className="flex items-center gap-2 font-medium text-amber-400">
               <AlertCircle className="size-3.5" />
               <span>NZB ohne TMDB-Treffer</span>
             </div>
-            {hint.filename && (
-              <p className="text-muted-foreground truncate">
-                <span className="font-mono text-[10px]">{hint.filename}</span>
-              </p>
-            )}
-            {hint.parsedTitle && (
-              <p className="text-muted-foreground">
-                Erkannt: <span className="text-foreground">{hint.parsedTitle}</span>
-                {hint.parsedYear ? ` (${hint.parsedYear})` : ""}
-              </p>
-            )}
+            <p className="text-muted-foreground truncate">
+              <span className="font-mono text-[10px]">{hint.filename}</span>
+            </p>
           </div>
         )}
 

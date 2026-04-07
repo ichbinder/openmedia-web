@@ -278,10 +278,10 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         notifyTransitions(freshJobs);
         setJobs(freshJobs);
 
-        // Compute hash from freshly fetched data (not stale closure)
-        const freshActive = freshJobs.filter(
-          (j) => j.status !== "completed" && j.status !== "failed",
-        );
+        // Compute hash from freshly fetched data (not stale closure).
+        // Use the same TERMINAL_STATUSES set as hasActive so expired jobs
+        // don't keep the poll loop awake for one extra cycle.
+        const freshActive = freshJobs.filter((j) => !TERMINAL_STATUSES.has(j.status));
 
         // If no active jobs remain, stop polling immediately.
         // The useEffect will clean up on re-render when hasActive flips.

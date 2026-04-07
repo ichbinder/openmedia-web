@@ -23,7 +23,8 @@ import {
 
 /**
  * Format the remaining time until a needs_review job expires.
- * Returns strings like "2 Tage 5 Std", "5 Std 12 Min", or "läuft ab" for past timestamps.
+ * Returns strings like "2 Tage 5 Std", "5 Std 12 Min", "12 Min", "< 1 Min",
+ * or "läuft ab" for past timestamps.
  */
 function formatRemaining(reviewExpiresAt: string): string {
   const ms = new Date(reviewExpiresAt).getTime() - Date.now();
@@ -36,6 +37,7 @@ function formatRemaining(reviewExpiresAt: string): string {
 
   if (days > 0) return `${days} Tag${days === 1 ? "" : "e"} ${hours} Std`;
   if (hours > 0) return `${hours} Std ${minutes} Min`;
+  if (totalMinutes <= 0) return "< 1 Min";
   return `${minutes} Min`;
 }
 

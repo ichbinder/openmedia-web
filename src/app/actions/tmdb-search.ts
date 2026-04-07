@@ -6,8 +6,9 @@ import { searchMovies } from "@/lib/tmdb";
  * Slim TMDB search result for the assign-movie dialog.
  *
  * Only the fields the dialog needs to display + the tmdbId to send back to
- * the backend. Filters out movies without a release date (often noise) so
- * the user gets clean candidates.
+ * the backend. Movies without a release_date keep `year: null` rather than
+ * being dropped — TMDB sometimes lists upcoming films with empty dates and
+ * the user may still want to assign them.
  */
 export interface TmdbSearchResult {
   id: number;

@@ -61,8 +61,6 @@ describe("AssignMovieDialog", () => {
         jobId="job-123"
         hint={{
           filename: "Cryptic.Release.Name.2099.nzb",
-          parsedTitle: "Cryptic Release Name",
-          parsedYear: 2099,
         }}
         onAssigned={() => {}}
       />,
@@ -71,7 +69,6 @@ describe("AssignMovieDialog", () => {
     expect(screen.getByText("Film zuordnen")).toBeInTheDocument();
     expect(screen.getByText(/NZB ohne TMDB-Treffer/i)).toBeInTheDocument();
     expect(screen.getByText("Cryptic.Release.Name.2099.nzb")).toBeInTheDocument();
-    expect(screen.getByText(/Cryptic Release Name/)).toBeInTheDocument();
   });
 
   it("zeigt Hinweis wenn weniger als 2 Zeichen getippt wurden", () => {
@@ -88,6 +85,31 @@ describe("AssignMovieDialog", () => {
       screen.getByText("Tippe mindestens 2 Zeichen, um zu suchen"),
     ).toBeInTheDocument();
     expect(mockSearchTmdbForAssign).not.toHaveBeenCalled();
+  });
+
+  it("pre-populated den Search-Input mit dem Titel aus dem Filename", async () => {
+    mockSearchTmdbForAssign.mockResolvedValueOnce([]);
+
+    render(
+      <AssignMovieDialog
+        open={true}
+        onOpenChange={() => {}}
+        jobId="job-123"
+        hint={{ filename: "The.Matrix.1999.1080p.BluRay.x264-GROUP.nzb" }}
+        onAssigned={() => {}}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText("Filmtitel suchen…") as HTMLInputElement;
+    expect(input.value).toBe("The Matrix");
+
+    // The auto-populated query should also trigger a search
+    await waitFor(
+      () => {
+        expect(mockSearchTmdbForAssign).toHaveBeenCalledWith("The Matrix");
+      },
+      { timeout: 1000 },
+    );
   });
 
   it("triggert die Server Action nach 300ms Debounce und zeigt Treffer", async () => {
