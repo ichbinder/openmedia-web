@@ -116,16 +116,22 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   const lastJobsHashRef = useRef("");
   /** Track previous job statuses to detect transitions */
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
+  /**
+   * Flips to true after the very first successful fetch for a given user
+   * session. Used by notifyTransitions to suppress toasts on the initial
+   * population — otherwise every pre-existing job would fire a notification
+   * on login. Reset back to false in the logout branch.
+   */
+  const isInitializedRef = useRef(false);
 
   // ── Notify on status transitions ──────────────────────────
   const notifyTransitions = useCallback((freshJobs: DownloadJob[]) => {
     const prevMap = prevStatusMapRef.current;
-    // The very first fetch on login fills prevMap directly without calling
-    // notifyTransitions, so an empty map here means "this is the first poll
-    // tick after login" and we should NOT toast on jobs that already existed.
-    // (We use the size of the map, not freshJobs, because freshJobs being
-    // empty just means the user has no jobs at all.)
-    const isFirstTick = prevMap.size === 0;
+    // Explicit initialization flag instead of `prevMap.size === 0`. The size
+    // heuristic broke when a user had previously active jobs that all went
+    // terminal — the map was empty on the next polling pass, looking like a
+    // fresh login to notifyTransitions.
+    const isFirstTick = !isInitializedRef.current;
 
     for (const job of freshJobs) {
       const prevStatus = prevMap.get(job.id);
@@ -179,6 +185,8 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       newMap.set(job.id, job.status);
     }
     prevStatusMapRef.current = newMap;
+    // Mark as initialized so subsequent calls can toast on brand-new jobs.
+    isInitializedRef.current = true;
   }, []);
 
   // ── Fetch all jobs from API ──────────────────────────────
@@ -209,7 +217,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     if (user) {
       setIsLoading(true);
-      // First fetch: populate prevStatusMap without triggering toasts
+      // First fetch: populate prevStatusMap WITHOUT triggering toasts by
+      // bypassing notifyTransitions, then flip isInitializedRef so the next
+      // poll tick can start announcing new jobs.
       const token = getToken();
       if (token) {
         getDownloadJobs(token).then((res) => {
@@ -220,6 +230,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
               initialMap.set(job.id, job.status);
             }
             prevStatusMapRef.current = initialMap;
+            isInitializedRef.current = true;
             setJobs(res.data.jobs);
           }
           setIsLoading(false);
@@ -233,6 +244,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       setJobs([]);
       setIsLoading(false);
       prevStatusMapRef.current = new Map();
+      isInitializedRef.current = false;
     }
     return () => { cancelled = true; };
   }, [user]);

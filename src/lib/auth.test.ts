@@ -141,6 +141,12 @@ describe("Auth Module", () => {
       const result = await getCurrentUser();
       expect(result.user).toBeNull();
       expect(result.wasRejected).toBe(false);
+
+      // Verify /me is still called even without a token (httpOnly cookie fallback)
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/backend/auth/me",
+        expect.objectContaining({ headers: {} }),
+      );
     });
 
     it("löscht Token und setzt wasRejected=true bei 401", async () => {

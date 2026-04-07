@@ -113,16 +113,22 @@ export function AssignMovieDialog({
 
     const trimmed = query.trim();
     if (trimmed.length < 2) {
+      // Any pending/in-flight response must be invalidated too.
+      requestIdRef.current++;
       setResults([]);
       setLoading(false);
       return;
     }
 
+    // Bump the request id SYNCHRONOUSLY when scheduling a new search, not
+    // when the timer fires. Otherwise two fast consecutive queries could
+    // fire their timers close enough together that both see the same
+    // requestId after increment and the older result overwrites the fresher
+    // one.
+    const myRequestId = ++requestIdRef.current;
     setLoading(true);
 
     debounceRef.current = setTimeout(async () => {
-      // Track this request so a slow earlier response can't overwrite a fresher one.
-      const myRequestId = ++requestIdRef.current;
       try {
         const found = await searchTmdbForAssign(trimmed);
         if (myRequestId === requestIdRef.current) {
@@ -251,7 +257,9 @@ export function AssignMovieDialog({
           {!loading && query.trim().length >= 2 && results.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
               <Film className="size-8 opacity-40 mb-2" />
-              <p className="text-sm">Keine Filme gefunden für „{query.trim()}"</p>
+              <p className="text-sm">
+                Keine Filme gefunden für &bdquo;{query.trim()}&ldquo;
+              </p>
             </div>
           )}
 
