@@ -216,7 +216,13 @@ describe("AssignMovieDialog", () => {
     mockAssignMovieToJob.mockResolvedValueOnce({
       ok: false,
       status: 503,
-      data: { error: "TMDB-Lookup fehlgeschlagen." },
+      // backendFetch always types data as the generic T, but on errors the
+      // backend actually returns { error: "..." }. Cast to satisfy the
+      // AssignMovieResponse generic at the call site while still exercising
+      // the dialog's error-extraction code path.
+      data: { error: "TMDB-Lookup fehlgeschlagen." } as unknown as Awaited<
+        ReturnType<typeof mockAssignMovieToJob>
+      >["data"],
     });
 
     const onOpenChange = vi.fn();
