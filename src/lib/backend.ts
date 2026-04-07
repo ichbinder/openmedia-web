@@ -38,19 +38,35 @@ export async function backendFetch<T = unknown>(
 
 export interface DownloadJob {
   id: string;
-  status: "queued" | "provisioning" | "downloading" | "uploading" | "completed" | "failed";
+  // M021: 'needs_review' (waiting for manual TMDB assignment) and 'expired'
+  // (review window elapsed, terminal) added in S01/S02.
+  status:
+    | "needs_review"
+    | "queued"
+    | "provisioning"
+    | "downloading"
+    | "uploading"
+    | "completed"
+    | "failed"
+    | "expired";
   progress: number;
   error: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  // M021/S01: review-flow timestamps. null when status is not needs_review.
+  reviewExpiresAt?: string | null;
+  tmdbRetryCount?: number;
+  tmdbRetryAfter?: string | null;
   nzbFileId: string;
   nzbFile: {
     id: string;
     hash: string;
+    originalFilename?: string;
     resolution: string | null;
     fileExtension: string | null;
     s3Key: string | null;
+    // M021/S01: nullable. needs_review NzbFiles have no movie linked yet.
     movie: {
       id: string;
       tmdbId: number;
@@ -58,7 +74,7 @@ export interface DownloadJob {
       titleEn: string;
       posterPath: string | null;
       year: number | null;
-    };
+    } | null;
   };
 }
 
@@ -77,6 +93,39 @@ export async function getDownloadJob(jobId: string, token: string) {
 export async function getDownloadJobs(token: string, status?: string) {
   const query = status ? `?status=${status}` : "";
   return backendFetch<{ jobs: DownloadJob[] }>(`/downloads/jobs${query}`, { token });
+}
+
+/**
+ * M021/S02: link a needs_review job to a TMDB movie.
+ *
+ * Reuses or creates an NzbMovie on the backend, links the NzbFile, and flips
+ * all sibling needs_review jobs on the same hash to queued in one transaction.
+ * Provisioning is triggered server-side after the response.
+ *
+ * Returns the linked movie plus how many jobs were flipped (>1 if multiple
+ * users uploaded the same hash) and `alreadyAssigned: true` when another path
+ * (concurrent assign or background retry) had already linked the file.
+ */
+export interface AssignMovieResponse {
+  movie: {
+    id: string;
+    tmdbId: number;
+    imdbId: string | null;
+    titleDe: string;
+    titleEn: string;
+    year: number | null;
+    posterPath: string | null;
+  };
+  flippedCount: number;
+  alreadyAssigned: boolean;
+}
+
+export async function assignMovieToJob(jobId: string, tmdbId: number, token: string) {
+  return backendFetch<AssignMovieResponse>(`/downloads/jobs/${jobId}/assign-movie`, {
+    method: "POST",
+    body: JSON.stringify({ tmdbId }),
+    token,
+  });
 }
 
 export async function deleteDownloadJob(jobId: string, token: string) {
