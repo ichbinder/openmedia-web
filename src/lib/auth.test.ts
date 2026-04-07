@@ -110,16 +110,18 @@ describe("Auth Module", () => {
   });
 
   describe("getCurrentUser", () => {
-    it("gibt User bei gültigem Token", async () => {
+    it("gibt SessionResult mit User bei gültigem Token", async () => {
       storage["openmedia_token"] = "valid-token";
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => ({ user: { id: "1", email: "test@test.de", name: "Test" } }),
       });
 
-      const user = await getCurrentUser();
-      expect(user).toMatchObject({ email: "test@test.de" });
+      const result = await getCurrentUser();
+      expect(result.user).toMatchObject({ email: "test@test.de" });
+      expect(result.wasRejected).toBe(false);
 
       // Should send Authorization header
       expect(mockFetch).toHaveBeenCalledWith("/api/backend/auth/me", expect.objectContaining({
@@ -127,28 +129,48 @@ describe("Auth Module", () => {
       }));
     });
 
-    it("gibt null wenn kein Token vorhanden", async () => {
-      const user = await getCurrentUser();
-      expect(user).toBeNull();
-      expect(mockFetch).not.toHaveBeenCalled();
+    it("gibt SessionResult mit user=null und wasRejected=false ohne Token wenn /me leer antwortet", async () => {
+      // Without a token the proxy still calls /me (which may use a httpOnly cookie).
+      // If the response is 200 with user=null, that's a clean "no session" outcome.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: null }),
+      });
+
+      const result = await getCurrentUser();
+      expect(result.user).toBeNull();
+      expect(result.wasRejected).toBe(false);
+
+      // Verify /me is still called even without a token (httpOnly cookie fallback)
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/backend/auth/me",
+        expect.objectContaining({ headers: {} }),
+      );
     });
 
-    it("gibt null und löscht Token bei ungültigem Token", async () => {
+    it("löscht Token und setzt wasRejected=true bei 401", async () => {
       storage["openmedia_token"] = "expired-token";
 
-      mockFetch.mockResolvedValueOnce({ ok: false, json: async () => ({ error: "Unauthorized" }) });
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: "Unauthorized" }),
+      });
 
-      const user = await getCurrentUser();
-      expect(user).toBeNull();
+      const result = await getCurrentUser();
+      expect(result.user).toBeNull();
+      expect(result.wasRejected).toBe(true);
       expect(storage["openmedia_token"]).toBeUndefined();
     });
 
-    it("gibt null bei Netzwerk-Fehler", async () => {
+    it("gibt user=null und wasRejected=false bei Netzwerk-Fehler", async () => {
       storage["openmedia_token"] = "some-token";
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
-      const user = await getCurrentUser();
-      expect(user).toBeNull();
+      const result = await getCurrentUser();
+      expect(result.user).toBeNull();
+      expect(result.wasRejected).toBe(false);
     });
   });
 });

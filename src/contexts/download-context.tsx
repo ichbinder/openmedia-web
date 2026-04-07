@@ -28,24 +28,38 @@ import {
 /** Hours after which a non-terminal job is considered stale on the client */
 const CLIENT_STALE_HOURS = 2;
 
+/** Statuses that don't drive polling — the job won't change state on its own. */
+const TERMINAL_STATUSES = new Set<string>(["completed", "failed", "expired"]);
+
 // ── Status Labels ────────────────────────────────────────────
 
 type JobStatus = DownloadJob["status"];
 
 export function getStatusLabel(status: JobStatus): string {
   switch (status) {
+    case "needs_review": return "Zuordnung erforderlich";
     case "queued": return "Wartend…";
     case "provisioning": return "Server wird gestartet…";
     case "downloading": return "Wird heruntergeladen…";
     case "uploading": return "Wird hochgeladen…";
     case "completed": return "Bereit";
     case "failed": return "Fehlgeschlagen";
+    case "expired": return "Verworfen";
   }
 }
 
 /** Check if a job appears stuck (non-terminal for too long). */
 export function isJobStale(job: DownloadJob): boolean {
-  if (job.status === "completed" || job.status === "failed") return false;
+  // Terminal or waiting-for-user states are never "stale" — they have their
+  // own lifecycle (or no lifecycle at all).
+  if (
+    job.status === "completed" ||
+    job.status === "failed" ||
+    job.status === "expired" ||
+    job.status === "needs_review"
+  ) {
+    return false;
+  }
   const updatedAt = new Date(job.updatedAt).getTime();
   if (Number.isNaN(updatedAt)) return false;
   const ageHours = (Date.now() - updatedAt) / (1000 * 60 * 60);
@@ -69,8 +83,10 @@ interface DownloadContextValue {
   getLink: (nzbFileId: string) => Promise<string | null>;
   /** Get presigned stream URL for an NZB file (browser-compatible MP4) */
   getStreamUrl: (nzbFileId: string) => Promise<string | null>;
-  /** Number of active (non-terminal) jobs */
+  /** Number of active (non-terminal) jobs — includes needs_review */
   activeCount: number;
+  /** Number of jobs waiting for manual TMDB assignment (M021) */
+  needsReviewCount: number;
   /** Jobs that are completed (ready for download) */
   completedJobs: DownloadJob[];
   /** Loading state */
@@ -100,17 +116,45 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   const lastJobsHashRef = useRef("");
   /** Track previous job statuses to detect transitions */
   const prevStatusMapRef = useRef<Map<string, string>>(new Map());
+  /**
+   * Flips to true after the very first successful fetch for a given user
+   * session. Used by notifyTransitions to suppress toasts on the initial
+   * population — otherwise every pre-existing job would fire a notification
+   * on login. Reset back to false in the logout branch.
+   */
+  const isInitializedRef = useRef(false);
 
   // ── Notify on status transitions ──────────────────────────
   const notifyTransitions = useCallback((freshJobs: DownloadJob[]) => {
     const prevMap = prevStatusMapRef.current;
+    // Explicit initialization flag instead of `prevMap.size === 0`. The size
+    // heuristic broke when a user had previously active jobs that all went
+    // terminal — the map was empty on the next polling pass, looking like a
+    // fresh login to notifyTransitions.
+    const isFirstTick = !isInitializedRef.current;
 
     for (const job of freshJobs) {
       const prevStatus = prevMap.get(job.id);
-      if (!prevStatus) continue; // first fetch, no transition
+
+      // Brand-new job that didn't exist before. The only case where we want
+      // to toast on a brand-new job is needs_review — when an Extension
+      // upload comes in via the API while the user has the page open.
+      if (!prevStatus) {
+        if (job.status === "needs_review" && !isFirstTick) {
+          toast.warning("NZB konnte nicht zugeordnet werden", {
+            description:
+              "Manuelle Film-Zuordnung erforderlich. Klicke unten, um den richtigen Film auszuwählen.",
+            duration: 12_000,
+          });
+        }
+        continue;
+      }
+
+      // No status change — nothing to announce.
       if (prevStatus === job.status) continue;
 
       const movieTitle = job.nzbFile?.movie?.titleDe || job.nzbFile?.movie?.titleEn || "Film";
+      const fallbackName = job.nzbFile?.originalFilename?.replace(/\.nzb$/i, "") || "NZB";
 
       if (job.status === "completed" && prevStatus !== "completed") {
         toast.success(`${movieTitle} ist bereit`, {
@@ -122,7 +166,17 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
           description: job.error || "Unbekannter Fehler",
           duration: 10_000,
         });
+      } else if (job.status === "expired" && prevStatus === "needs_review") {
+        // Review window elapsed without manual assignment — the reconciler
+        // cleaned up. Tell the user so they understand why the entry vanished.
+        toast.error(`Upload verworfen: ${fallbackName}`, {
+          description: "Die Review-Zeit ist ohne Zuordnung abgelaufen.",
+          duration: 10_000,
+        });
       }
+      // needs_review → queued (manual assign or background TMDB retry succeeded)
+      // is intentionally silent. The user will get the normal "completed" toast
+      // later when the download finishes.
     }
 
     // Update previous status map
@@ -131,6 +185,8 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       newMap.set(job.id, job.status);
     }
     prevStatusMapRef.current = newMap;
+    // Mark as initialized so subsequent calls can toast on brand-new jobs.
+    isInitializedRef.current = true;
   }, []);
 
   // ── Fetch all jobs from API ──────────────────────────────
@@ -161,7 +217,9 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     if (user) {
       setIsLoading(true);
-      // First fetch: populate prevStatusMap without triggering toasts
+      // First fetch: populate prevStatusMap WITHOUT triggering toasts by
+      // bypassing notifyTransitions, then flip isInitializedRef so the next
+      // poll tick can start announcing new jobs.
       const token = getToken();
       if (token) {
         getDownloadJobs(token).then((res) => {
@@ -172,6 +230,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
               initialMap.set(job.id, job.status);
             }
             prevStatusMapRef.current = initialMap;
+            isInitializedRef.current = true;
             setJobs(res.data.jobs);
           }
           setIsLoading(false);
@@ -185,14 +244,17 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       setJobs([]);
       setIsLoading(false);
       prevStatusMapRef.current = new Map();
+      isInitializedRef.current = false;
     }
     return () => { cancelled = true; };
   }, [user]);
 
   // ── Derived state ─────────────────────────────────────────
-  const hasActive = jobs.some(
-    (j) => j.status !== "completed" && j.status !== "failed",
-  );
+  // Terminal statuses don't drive polling. needs_review IS active in the
+  // sense that it can transition (manual assign or background TMDB retry),
+  // so polling continues — just at the slower backoff cadence because nothing
+  // visible to the user is changing per second.
+  const hasActive = jobs.some((j) => !TERMINAL_STATUSES.has(j.status));
 
   // ── Adaptive polling with exponential backoff ────────────
   // Polls fast when downloads are progressing, slows down
@@ -228,10 +290,10 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         notifyTransitions(freshJobs);
         setJobs(freshJobs);
 
-        // Compute hash from freshly fetched data (not stale closure)
-        const freshActive = freshJobs.filter(
-          (j) => j.status !== "completed" && j.status !== "failed",
-        );
+        // Compute hash from freshly fetched data (not stale closure).
+        // Use the same TERMINAL_STATUSES set as hasActive so expired jobs
+        // don't keep the poll loop awake for one extra cycle.
+        const freshActive = freshJobs.filter((j) => !TERMINAL_STATUSES.has(j.status));
 
         // If no active jobs remain, stop polling immediately.
         // The useEffect will clean up on re-render when hasActive flips.
@@ -356,9 +418,11 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const activeCount = jobs.filter(
-    (j) => j.status !== "completed" && j.status !== "failed"
-  ).length;
+  // activeCount includes needs_review (those count as "user has open work").
+  // Expired jobs are terminal and don't count.
+  const activeCount = jobs.filter((j) => !TERMINAL_STATUSES.has(j.status)).length;
+
+  const needsReviewCount = jobs.filter((j) => j.status === "needs_review").length;
 
   const completedJobs = jobs.filter((j) => j.status === "completed");
 
@@ -373,6 +437,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         getLink,
         getStreamUrl,
         activeCount,
+        needsReviewCount,
         completedJobs,
         isLoading,
         refresh: fetchJobs,
