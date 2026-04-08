@@ -75,7 +75,6 @@ next-env.d.ts
 .brv/
 backend/
 data/
-e2e/
 movies.tar
 playwright-report/
 scripts/
