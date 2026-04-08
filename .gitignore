@@ -82,3 +82,6 @@ scripts/
 server/
 test-results/
 .bg-shell/
+
+# ── GSD baseline (auto-generated) ──
+.gsd-id
