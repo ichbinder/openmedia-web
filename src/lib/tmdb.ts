@@ -1,6 +1,9 @@
 // TMDB API client — data foundation for trending, search, genre, and detail views.
 
-const TMDB_BASE_URL = "https://api.themoviedb.org/3";
+// Base URL is overridable via the TMDB_BASE_URL env var so the E2E test
+// suite can point this client at the local mock server (see
+// e2e/tmdb-mock-server.ts). Falls back to the real TMDB API in dev/prod.
+const TMDB_BASE_URL = process.env.TMDB_BASE_URL || "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
 
 // ---------------------------------------------------------------------------
