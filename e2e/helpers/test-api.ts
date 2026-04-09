@@ -16,6 +16,51 @@ export interface ForceCompleteResponse {
   s3StreamKey: string;
 }
 
+export interface AssignMovieResponse {
+  ok: boolean;
+  status: number;
+  movie?: { titleEn?: string };
+  flippedCount?: number;
+  alreadyAssigned?: boolean;
+}
+
+/**
+ * Assign a TMDB movie to a needs_review job via POST /downloads/jobs/:id/assign-movie.
+ * This is the production endpoint (not test-only) — requires the job owner's token.
+ * Used in the multi-user spec to make a deterministic assign call without relying
+ * on the UI dialog (which shows all users' jobs due to the non-scoped GET /jobs endpoint).
+ */
+export async function assignMovieDirect(params: {
+  jobId: string;
+  tmdbId: number;
+  token: string;
+}): Promise<AssignMovieResponse> {
+  const res = await fetch(`${BACKEND_URL}/downloads/jobs/${params.jobId}/assign-movie`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.token}`,
+    },
+    body: JSON.stringify({ tmdbId: params.tmdbId }),
+  });
+
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+
+  if (!res.ok) {
+    throw new Error(
+      `[e2e-test-api] assign-movie ${res.status}: ${JSON.stringify(body)}`,
+    );
+  }
+
+  return {
+    ok: true,
+    status: res.status,
+    movie: body.movie as AssignMovieResponse["movie"],
+    flippedCount: body.flippedCount as number | undefined,
+    alreadyAssigned: body.alreadyAssigned as boolean | undefined,
+  };
+}
+
 /**
  * Simulate a successful download callback for a job. After this call the
  * job will be in status=completed, the NzbFile will have fake S3 keys,
