@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { registerE2EUser } from "./helpers/auth";
+import { generateE2EUserData, registerE2EUser } from "./helpers/auth";
 import { uploadFreshUnmatchableNzb } from "./helpers/nzb-upload";
 import { forceCompleteJob } from "./helpers/test-api";
-import { cleanupTestUser, cleanupOrphanNzbFiles } from "./helpers/db-cleanup";
+import { cleanupAllE2EData } from "./helpers/db-cleanup";
 
 /**
  * M021/S01: Single-user needs_review flow.
@@ -30,22 +30,21 @@ import { cleanupTestUser, cleanupOrphanNzbFiles } from "./helpers/db-cleanup";
  */
 
 test.describe("M021 needs_review single-user flow", () => {
-  let testEmail: string | null = null;
-
   test.afterEach(async () => {
-    if (testEmail) {
-      await cleanupTestUser(testEmail);
-      await cleanupOrphanNzbFiles();
-      testEmail = null;
-    }
+    await cleanupAllE2EData();
   });
 
   test("upload unmatchable NZB → assign Matrix → force-complete → visible in library", async ({
     page,
   }) => {
     // ── 1. Register a fresh user via the frontend ─────────────────────
-    const user = await registerE2EUser(page);
-    testEmail = user.email;
+    // Generate the identity first so the email is known before the
+    // register call — if registration succeeds server-side but the
+    // helper fails on redirect/localStorage, afterEach's cleanup still
+    // covers it because cleanupAllE2EData() sweeps ALL e2e-*@test.local
+    // users, not just ones we explicitly tracked.
+    const identity = generateE2EUserData();
+    const user = await registerE2EUser(page, identity);
 
     // ── 2. Upload an unmatchable NZB directly against the backend ─────
     // The TMDB mock returns { results: [] } for any title it doesn't

@@ -12,7 +12,7 @@ import { randomBytes } from "node:crypto";
  * multi-user hash-sharing spec.
  */
 
-const BACKEND_URL = "http://localhost:4000";
+const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
 
 export interface UploadResponse {
   jobId: string;

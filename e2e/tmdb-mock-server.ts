@@ -116,7 +116,8 @@ function matchesQuery(movie: MockMovie, query: string): boolean {
 }
 
 function handleSearch(query: string): object {
-  const results = query.trim() ? FIXTURES.filter((m) => matchesQuery(m, query)) : [];
+  const normalized = query.trim();
+  const results = normalized ? FIXTURES.filter((m) => matchesQuery(m, normalized)) : [];
   return {
     page: 1,
     results,

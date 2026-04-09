@@ -60,10 +60,10 @@ export default defineConfig({
       // expected to be already running (either from a prior local session
       // or from the CI workflow). We don't start it here to avoid racing
       // with globalSetup when multiple configs share the same port.
-      command: `cd ${API_REPO_PATH} && npx tsx src/index.ts`,
+      command: `cd "${API_REPO_PATH}" && npx tsx src/index.ts`,
       url: `${BACKEND_URL}/health`,
       timeout: 60000,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       env: {
         DATABASE_URL: TEST_DATABASE_URL,
         JWT_SECRET: "e2e-test-secret",
@@ -101,7 +101,7 @@ export default defineConfig({
       command: "npm run dev",
       url: "http://localhost:3000",
       timeout: 60000,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       env: {
         BACKEND_URL,
         TMDB_BASE_URL: TMDB_MOCK_URL,
