@@ -13,9 +13,13 @@ export default async function globalTeardown(): Promise<void> {
 
   try {
     await server.close();
-    globalThis.__TMDB_MOCK_SERVER__ = undefined;
     console.log("[global-teardown] TMDB mock server stopped");
   } catch (err) {
     console.error("[global-teardown] failed to stop TMDB mock server:", err);
+  } finally {
+    // Always clear the reference — even on close() failure — so a
+    // subsequent globalSetup starts fresh instead of reusing a broken
+    // server handle.
+    globalThis.__TMDB_MOCK_SERVER__ = undefined;
   }
 }

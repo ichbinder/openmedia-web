@@ -49,7 +49,7 @@ export function buildUnmatchableNzbContent(title: string): string {
       <group>alt.binaries.test.e2e</group>
     </groups>
     <segments>
-      <segment bytes="1024" number="1">e2e-${title}-segment-1@local</segment>
+      <segment bytes="1024" number="1">e2e-${escapeXml(title)}-segment-1@local</segment>
     </segments>
   </file>
 </nzb>
