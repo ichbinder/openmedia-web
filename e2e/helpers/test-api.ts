@@ -46,8 +46,14 @@ export async function assignMovieDirect(params: {
 
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
 
+  if (!res.ok) {
+    throw new Error(
+      `[e2e-test-api] assign-movie ${res.status}: ${JSON.stringify(body)}`,
+    );
+  }
+
   return {
-    ok: res.ok,
+    ok: true,
     status: res.status,
     movie: body.movie as AssignMovieResponse["movie"],
     flippedCount: body.flippedCount as number | undefined,

@@ -18,8 +18,7 @@ import { cleanupAllE2EData } from "./helpers/db-cleanup";
  * contexts:
  *   1. User A and User B each register in their own BrowserContext.
  *   2. Both upload the same NZB content (same hash).
- *   3. User A assigns Matrix via a direct API call (bypassing the UI
- *      dialog to avoid the non-user-scoped job list complication).
+ *   3. User A assigns Matrix via a direct API call.
  *   4. User A's /downloads page shows "Aktive Downloads" (queued).
  *   5. User B reloads /downloads and sees their job ALSO in "Aktive
  *      Downloads" — without ever calling assign themselves.
@@ -33,19 +32,20 @@ test.describe("M021 multi-user hash-sharing flow", () => {
   });
 
   test("User A assigns → User B's job auto-flips to queued", async ({ browser }) => {
-    // ── Setup: two isolated browser contexts ─────────────────────────
     const contextA = await browser.newContext();
     const contextB = await browser.newContext();
     const pageA = await contextA.newPage();
     const pageB = await contextB.newPage();
 
     try {
-      // ── 1. Register both users ───────────────────────────────────────
+      // ── 1. Register both users (parallel — independent contexts) ─────
       const identityA = generateE2EUserData();
       const identityB = generateE2EUserData();
 
-      const userA = await registerE2EUser(pageA, identityA);
-      const userB = await registerE2EUser(pageB, identityB);
+      const [userA, userB] = await Promise.all([
+        registerE2EUser(pageA, identityA),
+        registerE2EUser(pageB, identityB),
+      ]);
 
       // ── 2. Both upload the SAME NZB (identical content = same hash) ──
       const sharedTitle = makeUnmatchableTitle();
@@ -74,55 +74,46 @@ test.describe("M021 multi-user hash-sharing flow", () => {
       expect(uploadB.jobId).not.toBe(uploadA.jobId);
 
       // ── 3. User A: verify needs_review, then assign via API ──────────
-      // We navigate to /downloads first to confirm the UI shows the
-      // review section, then assign via a direct API call. We use the
-      // API call (not the dialog) because the downloads endpoint is not
-      // user-scoped — User A would see User B's job too, making button
-      // targeting unreliable. The assign endpoint itself has an ownership
-      // check (job.userId === caller.userId), so calling it with User A's
-      // token + User A's jobId is the correct and deterministic path.
       await pageA.goto("/downloads");
       const reviewSectionA = pageA.locator("section", {
         hasText: "Zuordnung erforderlich",
       });
-      await expect(reviewSectionA).toBeVisible({ timeout: 15000 });
+      await expect(reviewSectionA).toBeVisible();
 
       // Assign Matrix (tmdbId 603) to User A's job via direct API call.
-      // This atomically flips ALL needs_review jobs on the shared NzbFile
-      // — including User B's job.
+      // This atomically flips ALL needs_review jobs on the shared NzbFile.
       const assignResult = await assignMovieDirect({
         jobId: uploadA.jobId,
         tmdbId: 603,
         token: userA.token,
       });
-      expect(assignResult.ok).toBe(true);
+      // Both User A's and User B's jobs should have been flipped atomically.
+      expect(assignResult.flippedCount).toBe(2);
 
       // Reload to pick up the state change.
       await pageA.reload();
 
       // User A should no longer see "Zuordnung erforderlich".
-      await expect(reviewSectionA).not.toBeVisible({ timeout: 10000 });
+      await expect(reviewSectionA).not.toBeVisible();
 
       // User A should see "Aktive Downloads" with their job.
       const activeSectionA = pageA.locator("section", {
         hasText: "Aktive Downloads",
       });
-      await expect(activeSectionA).toBeVisible({ timeout: 10000 });
+      await expect(activeSectionA).toBeVisible();
 
       // ── 4. User B: verify auto-flip (no assign action performed) ─────
       await pageB.goto("/downloads");
 
       // User B should NOT see "Zuordnung erforderlich".
-      const reviewSectionB = pageB.locator("section", {
-        hasText: "Zuordnung erforderlich",
-      });
-      await expect(reviewSectionB).not.toBeVisible({ timeout: 10000 });
+      await expect(
+        pageB.locator("section", { hasText: "Zuordnung erforderlich" }),
+      ).not.toBeVisible();
 
       // User B should see "Aktive Downloads".
-      const activeSectionB = pageB.locator("section", {
-        hasText: "Aktive Downloads",
-      });
-      await expect(activeSectionB).toBeVisible({ timeout: 10000 });
+      await expect(
+        pageB.locator("section", { hasText: "Aktive Downloads" }),
+      ).toBeVisible();
 
       // ── 5. Force-complete both jobs ──────────────────────────────────
       await forceCompleteJob(uploadA.jobId);
@@ -132,23 +123,23 @@ test.describe("M021 multi-user hash-sharing flow", () => {
       await pageA.reload();
       await expect(
         pageA.locator("section", { hasText: "Bereit" }),
-      ).toBeVisible({ timeout: 10000 });
+      ).toBeVisible();
 
       await pageB.reload();
       await expect(
         pageB.locator("section", { hasText: "Bereit" }),
-      ).toBeVisible({ timeout: 10000 });
+      ).toBeVisible();
 
       // ── 7. Both users see the movie in their library ─────────────────
       await pageA.goto("/bibliothek");
       await expect(
         pageA.getByRole("heading", { name: /Matrix/i }),
-      ).toBeVisible({ timeout: 15000 });
+      ).toBeVisible();
 
       await pageB.goto("/bibliothek");
       await expect(
         pageB.getByRole("heading", { name: /Matrix/i }),
-      ).toBeVisible({ timeout: 15000 });
+      ).toBeVisible();
     } finally {
       await contextA.close();
       await contextB.close();
