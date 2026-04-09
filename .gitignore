@@ -75,10 +75,12 @@ next-env.d.ts
 .brv/
 backend/
 data/
-e2e/
 movies.tar
 playwright-report/
 scripts/
 server/
 test-results/
 .bg-shell/
+
+# ── GSD baseline (auto-generated) ──
+.gsd-id
