@@ -143,8 +143,8 @@ function JobRow({ job, onAssignClick }: JobRowProps) {
             {stale ? "Möglicherweise hängengeblieben" : getStatusLabel(job.status)}
           </span>
           {isActive && !stale && <span className="text-cinema-gold">{job.progress}%</span>}
-          {job.nzbFile?.resolution && (
-            <span className="rounded bg-muted px-1.5 py-0.5">{job.nzbFile.resolution}</span>
+          {(job.nzbFile?.qualityTier || job.nzbFile?.resolution) && (
+            <span className="rounded bg-muted px-1.5 py-0.5">{job.nzbFile.qualityTier || job.nzbFile.resolution}</span>
           )}
           {isNeedsReview && job.reviewExpiresAt && (
             <span className="flex items-center gap-1 text-amber-400">

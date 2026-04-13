@@ -51,8 +51,10 @@ export function MovieHeroWithPlayer({
         const streamable = files
           .filter((f) => f.s3StreamKey)
           .sort((a, b) => {
-            const ai = a.resolution ? RES_ORDER.indexOf(a.resolution) : 99;
-            const bi = b.resolution ? RES_ORDER.indexOf(b.resolution) : 99;
+            const ar = a.qualityTier || a.resolution;
+            const br = b.qualityTier || b.resolution;
+            const ai = ar ? RES_ORDER.indexOf(ar) : 99;
+            const bi = br ? RES_ORDER.indexOf(br) : 99;
             return (ai === -1 ? 98 : ai) - (bi === -1 ? 98 : bi);
           });
 
