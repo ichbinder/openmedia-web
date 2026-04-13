@@ -114,9 +114,9 @@ function LibraryCard({
         </h3>
         <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
           {movie?.year && <span>{movie.year}</span>}
-          {item.nzbFile.resolution && (
+          {(item.nzbFile.qualityTier || item.nzbFile.resolution) && (
             <span className="rounded bg-muted px-1.5 py-0.5">
-              {item.nzbFile.resolution}
+              {item.nzbFile.qualityTier || item.nzbFile.resolution}
             </span>
           )}
           {item.nzbFile.fileExtension && (

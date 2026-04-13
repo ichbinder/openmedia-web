@@ -64,6 +64,7 @@ export interface DownloadJob {
     hash: string;
     originalFilename?: string;
     resolution: string | null;
+    qualityTier: string | null;
     fileExtension: string | null;
     s3Key: string | null;
     // M021/S01: nullable. needs_review NzbFiles have no movie linked yet.
@@ -138,6 +139,7 @@ export interface NzbFileInfo {
   id: string;
   hash: string;
   resolution: string | null;
+  qualityTier: string | null;
   s3Key: string | null;
   s3StreamKey: string | null;
   fileExtension: string | null;

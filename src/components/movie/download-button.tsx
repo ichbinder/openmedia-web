@@ -105,9 +105,9 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
     (f) => f.status !== "broken" && !f.s3Key
   );
 
-  // Sort each group by resolution
+  // Sort each group by quality tier (falls back to resolution for old entries)
   const sortByRes = (a: NzbFileInfo, b: NzbFileInfo) =>
-    resIndex(a.resolution) - resIndex(b.resolution);
+    resIndex(a.qualityTier || a.resolution) - resIndex(b.qualityTier || b.resolution);
   downloadedFiles.sort(sortByRes);
   availableFiles.sort(sortByRes);
   brokenFiles.sort(sortByRes);
@@ -229,9 +229,9 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
         >
           <Download className="size-4" />
           Herunterladen
-          {file.resolution && (
+          {(file.qualityTier || file.resolution) && (
             <span className="rounded bg-black/20 px-1.5 py-0.5 text-xs">
-              {file.resolution}
+              {file.qualityTier || file.resolution}
             </span>
           )}
         </button>
@@ -253,9 +253,9 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
           <CloudDownload className="size-4" />
         )}
         Verfügbar machen
-        {file.resolution && (
+        {(file.qualityTier || file.resolution) && (
           <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-xs">
-            {file.resolution}
+            {file.qualityTier || file.resolution}
           </span>
         )}
       </button>
@@ -445,7 +445,7 @@ function NzbDropdownItem({
               isBroken && "line-through text-muted-foreground"
             )}
           >
-            {file.resolution || "Unbekannt"}
+            {file.qualityTier || file.resolution || "Unbekannt"}
             {file.hash && (
               <span className="ml-1.5 text-xs text-muted-foreground font-normal">
                 {file.hash.slice(0, 8)}
