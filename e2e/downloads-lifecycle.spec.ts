@@ -79,11 +79,20 @@ async function createQueuedJob(token: string) {
     throw new Error(`[dl-lifecycle] Assign failed ${assignRes.status}: ${JSON.stringify(body)}`);
   }
 
-  // Verify it's now queued
-  const getRes = await fetch(`${BACKEND_URL}/downloads/jobs/${upload.jobId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const jobData = (await getRes.json()) as { job: { status: string; id: string; nzbFileId: string } };
+  // Verify it's now queued — poll with retries in case of async transitions
+  let attempts = 0;
+  let jobData: { job: { status: string; id: string; nzbFileId: string } };
+  do {
+    const getRes = await fetch(`${BACKEND_URL}/downloads/jobs/${upload.jobId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    jobData = (await getRes.json()) as { job: { status: string; id: string; nzbFileId: string } };
+    if (jobData.job.status === "queued") break;
+    if (++attempts >= 5) {
+      throw new Error(`[dl-lifecycle] Job did not transition to queued (got: ${jobData.job.status})`);
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  } while (true);
 
   return {
     jobId: jobData.job.id,
