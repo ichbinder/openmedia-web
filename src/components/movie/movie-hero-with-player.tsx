@@ -8,6 +8,7 @@ import { useDownloads } from "@/contexts/download-context";
 import { VideoPlayer } from "@/components/movie/video-player";
 import type { MovieDetail } from "@/lib/tmdb";
 import { getBackdropUrl } from "@/lib/tmdb";
+import { qualityRank } from "@/lib/utils";
 
 interface MovieHeroWithPlayerProps {
   movie: MovieDetail;
@@ -47,15 +48,10 @@ export function MovieHeroWithPlayer({
 
         // Find the best file with a stream version (s3StreamKey = browser-compatible MP4)
         // Prefer highest resolution
-        const RES_ORDER = ["2160p", "1080p", "720p", "480p"];
         const streamable = files
           .filter((f) => f.s3StreamKey)
           .sort((a, b) => {
-            const ar = a.qualityTier || a.resolution;
-            const br = b.qualityTier || b.resolution;
-            const ai = ar ? RES_ORDER.indexOf(ar) : 99;
-            const bi = br ? RES_ORDER.indexOf(br) : 99;
-            return (ai === -1 ? 98 : ai) - (bi === -1 ? 98 : bi);
+            return qualityRank(a.qualityTier || a.resolution) - qualityRank(b.qualityTier || b.resolution);
           });
 
         setStreamableFileId(streamable[0]?.id ?? null);
