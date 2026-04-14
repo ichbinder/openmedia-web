@@ -13,7 +13,7 @@ import {
 import { useDownloads, getStatusLabel } from "@/contexts/download-context";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn, qualityRank } from "@/lib/utils";
 import type { NzbFileInfo, DownloadJob } from "@/lib/backend";
 import {
   DropdownMenu,
@@ -34,12 +34,8 @@ interface DownloadButtonProps {
   className?: string;
 }
 
-/** Resolution sort order — higher resolution first */
-const RES_ORDER = ["2160p", "1080p", "720p", "480p"];
-function resIndex(r: string | null): number {
-  if (!r) return 99;
-  const idx = RES_ORDER.indexOf(r);
-  return idx === -1 ? 98 : idx;
+function sortByRes(a: NzbFileInfo, b: NzbFileInfo) {
+  return qualityRank(a.qualityTier || a.resolution) - qualityRank(b.qualityTier || b.resolution);
 }
 
 export function DownloadButton({ movie, className }: DownloadButtonProps) {
@@ -106,8 +102,6 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
   );
 
   // Sort each group by quality tier (falls back to resolution for old entries)
-  const sortByRes = (a: NzbFileInfo, b: NzbFileInfo) =>
-    resIndex(a.qualityTier || a.resolution) - resIndex(b.qualityTier || b.resolution);
   downloadedFiles.sort(sortByRes);
   availableFiles.sort(sortByRes);
   brokenFiles.sort(sortByRes);
