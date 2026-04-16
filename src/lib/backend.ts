@@ -144,7 +144,7 @@ export interface NzbFileInfo {
   s3StreamKey: string | null;
   fileExtension: string | null;
   downloadedAt: string | null;
-  status: "ok" | "broken" | "untested";
+  status: "ok" | "broken" | "untested" | "expired";
   brokenReason: string | null;
   failedAttempts: number;
 }
