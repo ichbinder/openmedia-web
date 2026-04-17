@@ -57,6 +57,7 @@ export function Header() {
                   <Link
                     href="/admin/config"
                     className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Admin Einstellungen"
                   >
                     <Settings className="size-4" />
                   </Link>

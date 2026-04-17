@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plus,
   Trash2,
@@ -64,6 +64,7 @@ export function ConfigManager() {
   const [loading, setLoading] = useState(true);
   const [entriesLoading, setEntriesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fetchEntriesIdRef = useRef(0);
 
   // Reveal state per entry
   const [revealedEntries, setRevealedEntries] = useState<Set<string>>(new Set());
@@ -105,17 +106,22 @@ export function ConfigManager() {
 
   // Fetch entries for selected category
   const fetchEntries = useCallback(async (categoryName: string) => {
+    const requestId = ++fetchEntriesIdRef.current;
     setEntriesLoading(true);
     setRevealedEntries(new Set());
     try {
-      const res = await fetch(`/api/backend/admin/config/entries/${categoryName}`);
+      const res = await fetch(`/api/backend/admin/config/entries/${encodeURIComponent(categoryName)}`);
+      if (requestId !== fetchEntriesIdRef.current) return;
       if (!res.ok) throw new Error("Einträge konnten nicht geladen werden.");
       const data = await res.json();
       setEntries(data.entries || []);
     } catch (err) {
+      if (requestId !== fetchEntriesIdRef.current) return;
       setError((err as Error).message);
     } finally {
-      setEntriesLoading(false);
+      if (requestId === fetchEntriesIdRef.current) {
+        setEntriesLoading(false);
+      }
     }
   }, []);
 
@@ -147,7 +153,7 @@ export function ConfigManager() {
     setRevealingEntry(entry.id);
     try {
       const res = await fetch(
-        `/api/backend/admin/config/entries/${entry.categoryName}/${entry.key}?reveal=true`,
+        `/api/backend/admin/config/entries/${encodeURIComponent(entry.categoryName)}/${encodeURIComponent(entry.key)}?reveal=true`,
       );
       if (!res.ok) throw new Error("Geheimer Wert konnte nicht geladen werden.");
       const data = await res.json();
@@ -185,16 +191,18 @@ export function ConfigManager() {
     if (entry.encrypted) {
       try {
         const res = await fetch(
-          `/api/backend/admin/config/entries/${entry.categoryName}/${entry.key}?reveal=true`,
+          `/api/backend/admin/config/entries/${encodeURIComponent(entry.categoryName)}/${encodeURIComponent(entry.key)}?reveal=true`,
         );
         if (res.ok) {
           const data = await res.json();
           setFormValue(data.entry.value);
         } else {
-          setFormValue("");
+          setFormValue(entry.value);
+          setError("Geheimer Wert konnte nicht entschlüsselt werden.");
         }
       } catch {
-        setFormValue("");
+        setFormValue(entry.value);
+        setError("Geheimer Wert konnte nicht geladen werden.");
       }
     } else {
       setFormValue(entry.value);
@@ -246,7 +254,7 @@ export function ConfigManager() {
 
     try {
       const res = await fetch(
-        `/api/backend/admin/config/entries/${deleteTarget.categoryName}/${deleteTarget.key}`,
+        `/api/backend/admin/config/entries/${encodeURIComponent(deleteTarget.categoryName)}/${encodeURIComponent(deleteTarget.key)}`,
         { method: "DELETE" },
       );
 
@@ -374,6 +382,13 @@ export function ConfigManager() {
                         className="size-8"
                         onClick={() => handleReveal(entry)}
                         disabled={revealingEntry === entry.id}
+                        aria-label={
+                          revealingEntry === entry.id
+                            ? "Wert wird geladen"
+                            : revealedEntries.has(entry.id)
+                              ? "Wert verbergen"
+                              : "Wert anzeigen"
+                        }
                       >
                         {revealingEntry === entry.id ? (
                           <Loader2 className="size-4 animate-spin" />
@@ -389,6 +404,7 @@ export function ConfigManager() {
                       variant="ghost"
                       size="icon"
                       className="size-8"
+                      aria-label={`Änderungsverlauf für ${entry.key}`}
                       onClick={() =>
                         setHistoryTarget({ category: entry.categoryName, key: entry.key })
                       }
@@ -400,6 +416,7 @@ export function ConfigManager() {
                       variant="ghost"
                       size="icon"
                       className="size-8"
+                      aria-label={`${entry.key} bearbeiten`}
                       onClick={() => openEditDialog(entry)}
                     >
                       <Pencil className="size-4" />
@@ -409,6 +426,7 @@ export function ConfigManager() {
                       variant="ghost"
                       size="icon"
                       className="size-8 text-destructive hover:text-destructive"
+                      aria-label={`${entry.key} löschen`}
                       onClick={() => setDeleteTarget(entry)}
                     >
                       <Trash2 className="size-4" />

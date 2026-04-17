@@ -4,7 +4,7 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
-  isAdmin?: boolean;
+  isAdmin: boolean;
 }
 
 export interface AuthCredentials {
@@ -19,6 +19,11 @@ export interface RegisterData extends AuthCredentials {
 export type AuthResult =
   | { success: true; user: AuthUser; token: string }
   | { success: false; error: string };
+
+/** Normalize API response to ensure isAdmin is always a boolean */
+function normalizeUser(user: Record<string, unknown>): AuthUser {
+  return { ...user, isAdmin: !!user.isAdmin } as AuthUser;
+}
 
 const API_BASE = "/api/backend/auth";
 const TOKEN_KEY = "openmedia_token";
@@ -54,7 +59,7 @@ export async function registerUser(data: RegisterData): Promise<AuthResult> {
     }
 
     setToken(json.token);
-    return { success: true, user: json.user, token: json.token };
+    return { success: true, user: normalizeUser(json.user), token: json.token };
   } catch {
     return { success: false, error: "Verbindung zum Server fehlgeschlagen." };
   }
@@ -75,7 +80,7 @@ export async function loginUser(credentials: AuthCredentials): Promise<AuthResul
     }
 
     setToken(json.token);
-    return { success: true, user: json.user, token: json.token };
+    return { success: true, user: normalizeUser(json.user), token: json.token };
   } catch {
     return { success: false, error: "Verbindung zum Server fehlgeschlagen." };
   }
@@ -114,7 +119,7 @@ export async function getCurrentUser(): Promise<SessionResult> {
     }
 
     const json = await res.json();
-    return { user: json.user ?? null, wasRejected: false };
+    return { user: json.user ? normalizeUser(json.user) : null, wasRejected: false };
   } catch {
     return { user: null, wasRejected: false };
   }

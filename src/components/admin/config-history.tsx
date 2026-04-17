@@ -70,7 +70,7 @@ export function ConfigHistory({ categoryName, entryKey, onClose }: ConfigHistory
     async function fetchHistory() {
       try {
         const res = await fetch(
-          `/api/backend/admin/config/history/${categoryName}/${entryKey}`,
+          `/api/backend/admin/config/history/${encodeURIComponent(categoryName)}/${encodeURIComponent(entryKey)}`,
         );
         if (!res.ok) throw new Error("Historie konnte nicht geladen werden.");
         const data = await res.json();
