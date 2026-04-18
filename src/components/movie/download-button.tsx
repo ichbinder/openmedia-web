@@ -95,10 +95,10 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
   // Categorize
   const downloadedFiles = visibleFiles.filter((f) => f.s3Key);
   const brokenFiles = visibleFiles.filter(
-    (f) => f.status === "broken" && !f.s3Key
+    (f) => (f.status === "broken" || f.status === "expired") && !f.s3Key
   );
   const availableFiles = visibleFiles.filter(
-    (f) => f.status !== "broken" && !f.s3Key
+    (f) => f.status !== "broken" && f.status !== "expired" && !f.s3Key
   );
 
   // Sort each group by quality tier (falls back to resolution for old entries)

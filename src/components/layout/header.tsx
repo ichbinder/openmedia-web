@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, Film, LogIn, LogOut, User } from "lucide-react";
+import { Menu, Film, LogIn, LogOut, User, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -53,6 +53,15 @@ export function Header() {
           <div className="ml-2 border-l border-border/40 pl-2">
             {user ? (
               <div className="flex items-center gap-2">
+                {user.isAdmin && (
+                  <Link
+                    href="/admin/config"
+                    className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label="Admin Einstellungen"
+                  >
+                    <Settings className="size-4" />
+                  </Link>
+                )}
                 <Link
                   href="/profile"
                   className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -115,6 +124,18 @@ export function Header() {
               <div className="mt-2 border-t border-border/40 pt-2">
                 {user ? (
                   <>
+                    {user.isAdmin && (
+                      <SheetClose render={<span />}>
+                        <Link
+                          href="/admin/config"
+                          className="flex items-center gap-2 rounded-md px-3 py-2.5 text-base font-medium text-foreground transition-colors hover:bg-muted"
+                          onClick={() => setOpen(false)}
+                        >
+                          <Settings className="size-4" />
+                          Konfiguration
+                        </Link>
+                      </SheetClose>
+                    )}
                     <SheetClose render={<span />}>
                       <Link
                         href="/profile"
