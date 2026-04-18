@@ -23,7 +23,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfigHistory } from "./config-history";
@@ -102,7 +101,8 @@ export function ConfigManager() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only fetch on mount, selectedCategory is read inside but shouldn't trigger re-fetch
+  }, []);
 
   // Fetch entries for selected category
   const fetchEntries = useCallback(async (categoryName: string) => {
@@ -187,22 +187,21 @@ export function ConfigManager() {
     setFormDescription(entry.description);
     setFormEncrypted(entry.encrypted);
 
-    // For encrypted entries, fetch the real value
+    // For encrypted entries, fetch the real value before opening the dialog
     if (entry.encrypted) {
       try {
         const res = await fetch(
           `/api/backend/admin/config/entries/${encodeURIComponent(entry.categoryName)}/${encodeURIComponent(entry.key)}?reveal=true`,
         );
-        if (res.ok) {
-          const data = await res.json();
-          setFormValue(data.entry.value);
-        } else {
-          setFormValue(entry.value);
-          setError("Geheimer Wert konnte nicht entschlüsselt werden.");
+        if (!res.ok) {
+          setError("Geheimer Wert konnte nicht entschlüsselt werden. Bearbeitung abgebrochen.");
+          return;
         }
+        const data = await res.json();
+        setFormValue(data.entry.value);
       } catch {
-        setFormValue(entry.value);
-        setError("Geheimer Wert konnte nicht geladen werden.");
+        setError("Geheimer Wert konnte nicht geladen werden. Bearbeitung abgebrochen.");
+        return;
       }
     } else {
       setFormValue(entry.value);
