@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
-import { User, Key } from "lucide-react";
+import { User, Key, Settings } from "lucide-react";
 import { ApiTokenManager } from "@/components/profile/api-tokens";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
@@ -29,6 +30,25 @@ export default function ProfilePage() {
             </div>
           </dl>
         </div>
+
+        {/* Admin */}
+        {user?.isAdmin && (
+          <div className="mt-8">
+            <h2 className="flex items-center gap-2 text-xl font-semibold">
+              <Settings className="size-5" />
+              Administration
+            </h2>
+            <div className="mt-4 rounded-lg border border-border bg-card p-6">
+              <Link
+                href="/admin/config"
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <Settings className="size-4" />
+                VPS-Konfiguration verwalten
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* API Tokens */}
         <div className="mt-8">
