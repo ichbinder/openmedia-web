@@ -68,6 +68,7 @@ export function UsenetProviders() {
       if (!res.ok) throw new Error("Provider konnten nicht geladen werden.");
       const data = await res.json();
       setProviders(data.providers || []);
+      setError(null);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -206,7 +207,7 @@ export function UsenetProviders() {
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {providers.length} {providers.length === 1 ? "Provider" : "Provider"}
+          {providers.length} Provider
         </p>
         <Button size="sm" onClick={handleCreate}>
           <Plus className="mr-1.5 size-4" />

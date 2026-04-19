@@ -134,8 +134,6 @@ export function UsenetProviderDialog({
     // Only include password if provided (for edit: empty = keep current)
     if (password) {
       formData.password = password;
-    } else if (!isEdit) {
-      formData.password = password;
     }
 
     setSubmitting(true);
