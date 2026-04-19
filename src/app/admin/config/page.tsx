@@ -1,12 +1,17 @@
 "use client";
 
-import { Settings } from "lucide-react";
+import { useState } from "react";
+import { Settings, Server } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { ConfigManager } from "@/components/admin/config-manager";
+import { UsenetProviders } from "@/components/admin/usenet-providers";
+
+type AdminTab = "config" | "usenet";
 
 export default function AdminConfigPage() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<AdminTab>("config");
 
   return (
     <ProtectedRoute>
@@ -17,7 +22,36 @@ export default function AdminConfigPage() {
         </div>
 
         {user?.isAdmin ? (
-          <ConfigManager />
+          <div className="space-y-4">
+            {/* Top-level tabs */}
+            <div className="flex gap-2 border-b pb-2">
+              <button
+                onClick={() => setActiveTab("config")}
+                className={`flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === "config"
+                    ? "border-b-2 border-primary text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Settings className="size-4" />
+                Einstellungen
+              </button>
+              <button
+                onClick={() => setActiveTab("usenet")}
+                className={`flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === "usenet"
+                    ? "border-b-2 border-primary text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Server className="size-4" />
+                Usenet Provider
+              </button>
+            </div>
+
+            {activeTab === "config" && <ConfigManager />}
+            {activeTab === "usenet" && <UsenetProviders />}
+          </div>
         ) : (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
             <p className="text-destructive">
