@@ -94,7 +94,7 @@ export function UsenetProviderDialog({
       setError("Benutzername ist erforderlich.");
       return;
     }
-    if (!isEdit && !password) {
+    if (!isEdit && !password.trim()) {
       setError("Passwort ist erforderlich.");
       return;
     }
@@ -132,7 +132,7 @@ export function UsenetProviderDialog({
     };
 
     // Only include password if provided (for edit: empty = keep current)
-    if (password) {
+    if (password.trim()) {
       formData.password = password;
     }
 

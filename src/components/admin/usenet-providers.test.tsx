@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from "vitest";
 import { render, screen, waitFor, fireEvent, cleanup } from "@testing-library/react";
 import { UsenetProviders } from "./usenet-providers";
 
@@ -12,6 +12,10 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+});
+
+afterAll(() => {
+  vi.unstubAllGlobals();
 });
 
 const mockProvider = {
