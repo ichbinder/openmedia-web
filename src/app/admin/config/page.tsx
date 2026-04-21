@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Settings, Server } from "lucide-react";
+import { Settings, Server, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { ConfigManager } from "@/components/admin/config-manager";
 import { UsenetProviders } from "@/components/admin/usenet-providers";
+import { VpnProviders } from "@/components/admin/vpn-providers";
 
-type AdminTab = "config" | "usenet";
+type AdminTab = "config" | "usenet" | "vpn";
 
 export default function AdminConfigPage() {
   const { user } = useAuth();
@@ -47,10 +48,22 @@ export default function AdminConfigPage() {
                 <Server className="size-4" />
                 Usenet Provider
               </button>
+              <button
+                onClick={() => setActiveTab("vpn")}
+                className={`flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === "vpn"
+                    ? "border-b-2 border-primary text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Shield className="size-4" />
+                VPN Provider
+              </button>
             </div>
 
             {activeTab === "config" && <ConfigManager />}
             {activeTab === "usenet" && <UsenetProviders />}
+            {activeTab === "vpn" && <VpnProviders />}
           </div>
         ) : (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
