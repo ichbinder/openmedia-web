@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, AlertCircle, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -38,6 +38,13 @@ export function VpnJobConfig() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
 
   const fetchProviders = useCallback(async () => {
     try {
@@ -123,7 +130,7 @@ export function VpnJobConfig() {
       );
 
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      successTimerRef.current = setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -160,7 +167,7 @@ export function VpnJobConfig() {
           <Label>Download VPN-Provider</Label>
           <Select
             value={downloadVpnProviderId}
-            onValueChange={(v) => setDownloadVpnProviderId(v ?? "none")}
+            onValueChange={(v) => { if (v) setDownloadVpnProviderId(v); }}
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Kein VPN" />
@@ -180,7 +187,7 @@ export function VpnJobConfig() {
           <Label>Upload VPN-Provider</Label>
           <Select
             value={uploadVpnProviderId}
-            onValueChange={(v) => setUploadVpnProviderId(v ?? "none")}
+            onValueChange={(v) => { if (v) setUploadVpnProviderId(v); }}
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Kein VPN" />

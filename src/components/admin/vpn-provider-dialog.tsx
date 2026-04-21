@@ -25,8 +25,7 @@ interface VpnProviderDialogProps {
 
 function detectProtocol(config: string): "wireguard" | "openvpn" | null {
   const hasInterface = config.includes("[Interface]");
-  const hasPeer = config.includes("[Peer]");
-  if (hasInterface && hasPeer) return "wireguard";
+  if (hasInterface) return "wireguard";
 
   const hasClient = /^client\s*$/m.test(config);
   const hasDevTun = /^dev\s+tu[np]/m.test(config);
