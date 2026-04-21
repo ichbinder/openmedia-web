@@ -184,6 +184,10 @@ describe("VpnJobConfig", () => {
         screen.getByText("VPN-Provider konnten nicht geladen werden."),
       ).toBeInTheDocument();
     });
+
+    // Save button should be disabled after load error
+    const saveButton = screen.getByRole("button", { name: /Speichern/ });
+    expect(saveButton).toBeDisabled();
   });
 
   it("zeigt Fehlermeldung wenn Speichern fehlschlägt", async () => {

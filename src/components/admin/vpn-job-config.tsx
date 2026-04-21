@@ -30,10 +30,11 @@ const CONFIG_KEYS = {
 
 export function VpnJobConfig() {
   const [providers, setProviders] = useState<VpnProviderOption[]>([]);
-  const [downloadVpnProviderId, setDownloadVpnProviderId] = useState("");
-  const [uploadVpnProviderId, setUploadVpnProviderId] = useState("");
+  const [downloadVpnProviderId, setDownloadVpnProviderId] = useState("none");
+  const [uploadVpnProviderId, setUploadVpnProviderId] = useState("none");
   const [bypassList, setBypassList] = useState(DEFAULT_BYPASS_LIST);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -47,6 +48,7 @@ export function VpnJobConfig() {
       setProviders(allProviders.filter((p) => p.enabled));
     } catch (err) {
       setError((err as Error).message);
+      setLoadError(true);
     }
   }, []);
 
@@ -61,15 +63,16 @@ export function VpnJobConfig() {
 
       for (const entry of entries) {
         if (entry.key === CONFIG_KEYS.downloadVpnProviderId) {
-          setDownloadVpnProviderId(entry.value);
+          setDownloadVpnProviderId(entry.value || "none");
         } else if (entry.key === CONFIG_KEYS.uploadVpnProviderId) {
-          setUploadVpnProviderId(entry.value);
+          setUploadVpnProviderId(entry.value || "none");
         } else if (entry.key === CONFIG_KEYS.bypassList) {
           if (entry.value) setBypassList(entry.value);
         }
       }
     } catch (err) {
       setError((err as Error).message);
+      setLoadError(true);
     }
   }, []);
 
@@ -85,16 +88,17 @@ export function VpnJobConfig() {
     setSuccess(false);
 
     try {
+      const toValue = (v: string) => (v === "none" ? "" : v);
       const puts = [
         {
           categoryName: "vpn",
           key: CONFIG_KEYS.downloadVpnProviderId,
-          value: downloadVpnProviderId,
+          value: toValue(downloadVpnProviderId),
         },
         {
           categoryName: "vpn",
           key: CONFIG_KEYS.uploadVpnProviderId,
-          value: uploadVpnProviderId,
+          value: toValue(uploadVpnProviderId),
         },
         {
           categoryName: "vpn",
@@ -103,17 +107,20 @@ export function VpnJobConfig() {
         },
       ];
 
-      for (const body of puts) {
-        const res = await fetch("/api/backend/admin/config/entries", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Speichern fehlgeschlagen.");
-        }
-      }
+      await Promise.all(
+        puts.map(async (body) => {
+          const res = await fetch("/api/backend/admin/config/entries", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || "Speichern fehlgeschlagen.");
+          }
+          return res;
+        }),
+      );
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -153,13 +160,13 @@ export function VpnJobConfig() {
           <Label>Download VPN-Provider</Label>
           <Select
             value={downloadVpnProviderId}
-            onValueChange={(v) => v !== null && setDownloadVpnProviderId(v ?? "")}
+            onValueChange={(v) => setDownloadVpnProviderId(v ?? "none")}
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Kein VPN" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Kein VPN</SelectItem>
+              <SelectItem value="none">Kein VPN</SelectItem>
               {providers.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name}
@@ -173,13 +180,13 @@ export function VpnJobConfig() {
           <Label>Upload VPN-Provider</Label>
           <Select
             value={uploadVpnProviderId}
-            onValueChange={(v) => v !== null && setUploadVpnProviderId(v ?? "")}
+            onValueChange={(v) => setUploadVpnProviderId(v ?? "none")}
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Kein VPN" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Kein VPN</SelectItem>
+              <SelectItem value="none">Kein VPN</SelectItem>
               {providers.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name}
@@ -204,7 +211,7 @@ export function VpnJobConfig() {
       </div>
 
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving || loadError}>
           {saving ? (
             <Loader2 className="mr-1.5 size-4 animate-spin" />
           ) : (
