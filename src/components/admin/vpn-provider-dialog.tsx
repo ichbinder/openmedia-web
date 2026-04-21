@@ -97,7 +97,7 @@ export function VpnProviderDialog({
     const protocol = detectProtocol(configBlob);
     if (!protocol) {
       setError(
-        "Config-Format nicht erkannt. WireGuard ([Interface]/[Peer]) oder OpenVPN (client/dev tun) erwartet."
+        "Config-Format nicht erkannt. WireGuard ([Interface]) oder OpenVPN (client/dev tun) erwartet."
       );
       return;
     }

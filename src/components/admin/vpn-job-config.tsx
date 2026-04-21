@@ -127,6 +127,7 @@ export function VpnJobConfig() {
       }
 
       setSuccess(true);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
       successTimerRef.current = setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError((err as Error).message);
