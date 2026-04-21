@@ -114,20 +114,17 @@ export function VpnJobConfig() {
         },
       ];
 
-      await Promise.all(
-        puts.map(async (body) => {
-          const res = await fetch("/api/backend/admin/config/entries", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.error || "Speichern fehlgeschlagen.");
-          }
-          return res;
-        }),
-      );
+      for (const body of puts) {
+        const res = await fetch("/api/backend/admin/config/entries", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Speichern fehlgeschlagen.");
+        }
+      }
 
       setSuccess(true);
       successTimerRef.current = setTimeout(() => setSuccess(false), 3000);
