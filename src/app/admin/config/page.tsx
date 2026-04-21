@@ -7,6 +7,7 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 import { ConfigManager } from "@/components/admin/config-manager";
 import { UsenetProviders } from "@/components/admin/usenet-providers";
 import { VpnProviders } from "@/components/admin/vpn-providers";
+import { VpnJobConfig } from "@/components/admin/vpn-job-config";
 
 type AdminTab = "config" | "usenet" | "vpn";
 
@@ -63,7 +64,15 @@ export default function AdminConfigPage() {
 
             {activeTab === "config" && <ConfigManager />}
             {activeTab === "usenet" && <UsenetProviders />}
-            {activeTab === "vpn" && <VpnProviders />}
+            {activeTab === "vpn" && (
+              <div className="space-y-6">
+                <VpnProviders />
+                <div>
+                  <h3 className="mb-3 text-lg font-semibold">VPN-Zuweisung</h3>
+                  <VpnJobConfig />
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
