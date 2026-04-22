@@ -162,7 +162,7 @@ describe("VpnJobConfig", () => {
     expect(bodies).toContainEqual({
       categoryName: "vpn",
       key: "bypassList",
-      value: "custom.host.de, 10.0.0.0/8",
+      value: JSON.stringify(["custom.host.de", "10.0.0.0/8"]),
     });
   });
 
