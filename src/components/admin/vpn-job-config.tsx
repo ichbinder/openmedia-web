@@ -74,7 +74,19 @@ export function VpnJobConfig() {
         } else if (entry.key === CONFIG_KEYS.uploadVpnProviderId) {
           setUploadVpnProviderId(entry.value || "none");
         } else if (entry.key === CONFIG_KEYS.bypassList) {
-          if (entry.value) setBypassList(entry.value);
+          if (entry.value) {
+            try {
+              const parsed = JSON.parse(entry.value);
+              if (Array.isArray(parsed)) {
+                setBypassList(parsed.join(", "));
+              } else {
+                setBypassList(entry.value);
+              }
+            } catch {
+              // Legacy plain-text value — use as-is
+              setBypassList(entry.value);
+            }
+          }
         }
       }
     } catch (err) {
@@ -110,7 +122,12 @@ export function VpnJobConfig() {
         {
           categoryName: "vpn",
           key: CONFIG_KEYS.bypassList,
-          value: bypassList,
+          value: JSON.stringify(
+            bypassList
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          ),
         },
       ];
 
