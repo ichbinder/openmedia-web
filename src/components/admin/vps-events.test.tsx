@@ -77,6 +77,23 @@ describe("VpsEvents", () => {
     });
   });
 
+  it("zeigt hetznerServerId 0 korrekt an (Regression)", async () => {
+    const eventWithZeroServerId = {
+      ...mockEvent,
+      downloadJob: { ...mockEvent.downloadJob, hetznerServerId: 0 },
+    };
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ events: [eventWithZeroServerId], total: 1, limit: 20, offset: 0 }),
+    });
+
+    render(<VpsEvents />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Server #0/)).toBeInTheDocument();
+    });
+  });
+
   it("zeigt Fehler bei API-Fehler", async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 

@@ -90,6 +90,13 @@ export function VpsEvents() {
 
   const totalPages = Math.ceil(total / limit);
 
+  // Clamp page when total shrinks (e.g. auto-refresh returns fewer results)
+  useEffect(() => {
+    if (totalPages > 0 && page >= totalPages) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [total, totalPages, page]);
+
   if (loading && events.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
