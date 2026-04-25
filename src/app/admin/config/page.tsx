@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Settings, Server, Shield } from "lucide-react";
+import { Settings, Server, Shield, Activity } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { ConfigManager } from "@/components/admin/config-manager";
 import { UsenetProviders } from "@/components/admin/usenet-providers";
 import { VpnProviders } from "@/components/admin/vpn-providers";
 import { VpnJobConfig } from "@/components/admin/vpn-job-config";
+import { VpsEvents } from "@/components/admin/vps-events";
 
-type AdminTab = "config" | "usenet" | "vpn";
+type AdminTab = "config" | "usenet" | "vpn" | "events";
 
 export default function AdminConfigPage() {
   const { user } = useAuth();
@@ -60,6 +61,17 @@ export default function AdminConfigPage() {
                 <Shield className="size-4" />
                 VPN Provider
               </button>
+              <button
+                onClick={() => setActiveTab("events")}
+                className={`flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === "events"
+                    ? "border-b-2 border-primary text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Activity className="size-4" />
+                VPS Events
+              </button>
             </div>
 
             {activeTab === "config" && <ConfigManager />}
@@ -73,6 +85,7 @@ export default function AdminConfigPage() {
                 </div>
               </div>
             )}
+            {activeTab === "events" && <VpsEvents />}
           </div>
         ) : (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
