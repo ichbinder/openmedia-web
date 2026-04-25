@@ -97,7 +97,8 @@ describe("VpsEvents", () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/backend/admin/config/vps-events")
+        expect.stringContaining("/api/backend/admin/config/vps-events"),
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
     });
   });

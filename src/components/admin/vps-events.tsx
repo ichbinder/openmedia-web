@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 };
 
 export function VpsEvents() {
+  const abortRef = useRef<AbortController | null>(null);
   const [events, setEvents] = useState<VpsEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -48,6 +49,9 @@ export function VpsEvents() {
   const limit = 20;
 
   const fetchEvents = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     try {
       setError(null);
@@ -57,20 +61,25 @@ export function VpsEvents() {
       if (jobTypeFilter !== "all") params.set("jobType", jobTypeFilter);
       if (severityFilter !== "all") params.set("severity", severityFilter);
 
-      const res = await fetch(`/api/backend/admin/config/vps-events?${params}`);
+      const res = await fetch(`/api/backend/admin/config/vps-events?${params}`, {
+        signal: controller.signal,
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (abortRef.current !== controller) return;
       setEvents(data.events);
       setTotal(data.total);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Fehler beim Laden");
     } finally {
-      setLoading(false);
+      if (abortRef.current === controller) setLoading(false);
     }
   }, [page, jobTypeFilter, severityFilter]);
 
   useEffect(() => {
     fetchEvents();
+    return () => abortRef.current?.abort();
   }, [fetchEvents]);
 
   // Auto-refresh every 30s
@@ -154,12 +163,16 @@ export function VpsEvents() {
                       {EVENT_TYPE_LABELS[event.eventType] ?? event.eventType}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {event.jobType === "download" ? "⬇ Download" : "⬆ Upload"}
+                      {event.jobType === "download"
+                        ? "⬇ Download"
+                        : event.jobType === "upload"
+                          ? "⬆ Upload"
+                          : event.jobType}
                     </span>
                     {job && (
                       <span className="text-xs text-muted-foreground">
                         · {job.status}
-                        {job.hetznerServerId ? ` · Server #${job.hetznerServerId}` : ""}
+                        {job.hetznerServerId != null ? ` · Server #${job.hetznerServerId}` : ""}
                       </span>
                     )}
                   </div>
