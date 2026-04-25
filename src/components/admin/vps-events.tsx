@@ -48,6 +48,7 @@ export function VpsEvents() {
   const limit = 20;
 
   const fetchEvents = useCallback(async () => {
+    setLoading(true);
     try {
       setError(null);
       const params = new URLSearchParams();
@@ -69,7 +70,6 @@ export function VpsEvents() {
   }, [page, jobTypeFilter, severityFilter]);
 
   useEffect(() => {
-    setLoading(true);
     fetchEvents();
   }, [fetchEvents]);
 
@@ -93,7 +93,7 @@ export function VpsEvents() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">VPS Events</h3>
-        <Button variant="ghost" size="sm" onClick={fetchEvents} disabled={loading}>
+        <Button variant="ghost" size="sm" onClick={fetchEvents} disabled={loading} aria-label="Events aktualisieren">
           <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
