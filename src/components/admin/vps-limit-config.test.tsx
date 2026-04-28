@@ -145,7 +145,7 @@ describe("VpsLimitConfig", () => {
     expect(putCalls).toHaveLength(0);
   });
 
-  it("zeigt Fehlermeldung wenn Config-Laden fehlschlaegt", async () => {
+  it("zeigt Fehlermeldung wenn Config-Laden fehlschlaegt und ermoeglicht Retry", async () => {
     mockFetch.mockImplementation(() => {
       return Promise.resolve({ ok: false });
     });
@@ -160,6 +160,16 @@ describe("VpsLimitConfig", () => {
 
     const saveButton = screen.getByRole("button", { name: /Speichern/ });
     expect(saveButton).toBeDisabled();
+
+    // Retry: mock succeeds now, click "Erneut versuchen"
+    mockInitialFetch([]);
+    fireEvent.click(screen.getByText("Erneut versuchen"));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Lade VPS-Limits/)).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: /Speichern/ })).not.toBeDisabled();
   });
 
   it("zeigt Fehlermeldung wenn Speichern fehlschlaegt", async () => {

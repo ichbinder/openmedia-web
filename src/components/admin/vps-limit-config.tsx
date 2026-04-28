@@ -63,7 +63,7 @@ export function VpsLimitConfig() {
 
   const validate = (): string | null => {
     if (globalLimit < 1) return "Globales Limit muss mindestens 1 sein.";
-    if (maxUploadVps < 0) return "Upload-Maximum darf nicht negativ sein.";
+    if (maxUploadVps < 1) return "Upload-Maximum muss mindestens 1 sein.";
     if (maxUploadVps > globalLimit)
       return "Upload-Maximum darf nicht groesser als das globale Limit sein.";
     return null;
@@ -137,10 +137,17 @@ export function VpsLimitConfig() {
           <AlertCircle className="size-4 shrink-0" />
           {error}
           <button
-            onClick={() => setError(null)}
+            onClick={() => {
+              setError(null);
+              if (loadError) {
+                setLoadError(false);
+                setLoading(true);
+                fetchConfig().finally(() => setLoading(false));
+              }
+            }}
             className="ml-auto text-xs underline"
           >
-            Schliessen
+            {loadError ? "Erneut versuchen" : "Schliessen"}
           </button>
         </div>
       )}
@@ -153,7 +160,10 @@ export function VpsLimitConfig() {
             type="number"
             min={1}
             value={globalLimit}
-            onChange={(e) => setGlobalLimit(parseInt(e.target.value, 10) || 1)}
+            onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            if (!isNaN(v)) setGlobalLimit(v);
+          }}
           />
           <p className="text-xs text-muted-foreground">
             Maximale Anzahl gleichzeitiger VPS (Hetzner-Limit: 10)
@@ -165,12 +175,13 @@ export function VpsLimitConfig() {
           <Input
             id="maxUploadVps"
             type="number"
-            min={0}
+            min={1}
             max={globalLimit}
             value={maxUploadVps}
-            onChange={(e) =>
-              setMaxUploadVps(parseInt(e.target.value, 10) || 0)
-            }
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v)) setMaxUploadVps(v);
+            }}
           />
           <p className="text-xs text-muted-foreground">
             Maximale Upload-VPS (Rest steht fuer Downloads bereit)
