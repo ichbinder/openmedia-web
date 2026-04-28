@@ -94,12 +94,17 @@ export function VpsLimitConfig() {
         },
       ];
 
-      for (const body of puts) {
-        const res = await fetch("/api/backend/admin/config/entries", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
+      const results = await Promise.all(
+        puts.map((body) =>
+          fetch("/api/backend/admin/config/entries", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          })
+        )
+      );
+
+      for (const res of results) {
         if (!res.ok) {
           const data = await res.json();
           throw new Error(data.error || "Speichern fehlgeschlagen.");
