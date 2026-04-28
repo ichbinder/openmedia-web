@@ -9,6 +9,7 @@ import { UsenetProviders } from "@/components/admin/usenet-providers";
 import { VpnProviders } from "@/components/admin/vpn-providers";
 import { VpnJobConfig } from "@/components/admin/vpn-job-config";
 import { VpsEvents } from "@/components/admin/vps-events";
+import { VpsLimitConfig } from "@/components/admin/vps-limit-config";
 
 type AdminTab = "config" | "usenet" | "vpn" | "events";
 
@@ -74,7 +75,15 @@ export default function AdminConfigPage() {
               </button>
             </div>
 
-            {activeTab === "config" && <ConfigManager />}
+            {activeTab === "config" && (
+              <div className="space-y-6">
+                <ConfigManager />
+                <div>
+                  <h3 className="mb-3 text-lg font-semibold">VPS-Limits</h3>
+                  <VpsLimitConfig />
+                </div>
+              </div>
+            )}
             {activeTab === "usenet" && <UsenetProviders />}
             {activeTab === "vpn" && (
               <div className="space-y-6">

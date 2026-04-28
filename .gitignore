@@ -84,3 +84,4 @@ test-results/
 
 # ── GSD baseline (auto-generated) ──
 .gsd-id
+.mcp.json
