@@ -104,6 +104,35 @@ describe("VpsQueueDashboard", () => {
     });
   });
 
+  it("zeigt Fehler bei ungültigem API-Response-Format", async () => {
+    mockFetch.mockImplementation(() =>
+      Promise.resolve({ ok: true, json: async () => ({ unexpected: true }) }),
+    );
+    render(<VpsQueueDashboard />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Ungültiges API-Response-Format"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("clampt Percent-Werte auf 0-100", async () => {
+    mockStatusFetch({
+      counts: { downloads: 20, uploads: 5, total: 25 },
+      limits: { globalLimit: 10, maxUploadVps: 3 },
+      queued: { downloads: 0, uploads: 0, total: 0 },
+    });
+    render(<VpsQueueDashboard />);
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Lade VPS-Status/)).not.toBeInTheDocument();
+    });
+
+    // Values exceed limits — progress bars should still render (clamped at 100)
+    expect(screen.getByText("25 / 10 VPS")).toBeInTheDocument();
+  });
+
   it("zeigt 1 Job korrekt (Singular)", async () => {
     mockStatusFetch({
       ...defaultStatus,

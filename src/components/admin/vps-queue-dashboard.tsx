@@ -28,8 +28,12 @@ export function VpsQueueDashboard() {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error("VPS-Status konnte nicht geladen werden.");
-      const data: VpsStatus = await res.json();
-      setStatus(data);
+      const data = await res.json();
+      // Runtime validation: ensure expected shape exists
+      if (!data?.counts || !data?.limits || !data?.queued) {
+        throw new Error("Ungültiges API-Response-Format");
+      }
+      setStatus(data as VpsStatus);
       setError(null);
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
@@ -80,9 +84,10 @@ export function VpsQueueDashboard() {
 
   const { counts, limits, queued } = status;
   const downloadMax = Math.max(0, limits.globalLimit - limits.maxUploadVps);
-  const globalPercent = limits.globalLimit > 0 ? (counts.total / limits.globalLimit) * 100 : 0;
-  const downloadPercent = downloadMax > 0 ? (counts.downloads / downloadMax) * 100 : 0;
-  const uploadPercent = limits.maxUploadVps > 0 ? (counts.uploads / limits.maxUploadVps) * 100 : 0;
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+  const globalPercent = clamp(limits.globalLimit > 0 ? (counts.total / limits.globalLimit) * 100 : 0);
+  const downloadPercent = clamp(downloadMax > 0 ? (counts.downloads / downloadMax) * 100 : 0);
+  const uploadPercent = clamp(limits.maxUploadVps > 0 ? (counts.uploads / limits.maxUploadVps) * 100 : 0);
 
   return (
     <div className="space-y-4">
