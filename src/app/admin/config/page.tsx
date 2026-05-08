@@ -10,6 +10,7 @@ import { VpnProviders } from "@/components/admin/vpn-providers";
 import { VpnJobConfig } from "@/components/admin/vpn-job-config";
 import { VpsEvents } from "@/components/admin/vps-events";
 import { VpsLimitConfig } from "@/components/admin/vps-limit-config";
+import { VpsQueueDashboard } from "@/components/admin/vps-queue-dashboard";
 
 type AdminTab = "config" | "usenet" | "vpn" | "events";
 
@@ -94,7 +95,12 @@ export default function AdminConfigPage() {
                 </div>
               </div>
             )}
-            {activeTab === "events" && <VpsEvents />}
+            {activeTab === "events" && (
+              <div className="space-y-6">
+                <VpsQueueDashboard />
+                <VpsEvents />
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
