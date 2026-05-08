@@ -14,12 +14,10 @@ interface VpsStatus {
 export function VpsQueueDashboard() {
   const abortRef = useRef<AbortController | null>(null);
   const [status, setStatus] = useState<VpsStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(null);
 
-  const fetchStatus = useCallback(async (withLoading = false) => {
-    if (withLoading) setLoading(true);
+  const fetchStatus = useCallback(async () => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -40,20 +38,21 @@ export function VpsQueueDashboard() {
       if ((err as Error).name !== "AbortError") {
         setError((err as Error).message);
       }
-    } finally {
-      if (withLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchStatus(true);
+    fetchStatus();
     // Auto-refresh every 30s
-    intervalRef.current = setInterval(() => fetchStatus(), 30000);
+    intervalRef.current = setInterval(fetchStatus, 30000);
     return () => {
       abortRef.current?.abort();
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [fetchStatus]);
+
+  // Loading is derived: nothing fetched yet and no error to display
+  const loading = status === null && error === null;
 
   if (loading) {
     return (
@@ -72,7 +71,7 @@ export function VpsQueueDashboard() {
         <button
           onClick={() => {
             setError(null);
-            fetchStatus(true);
+            fetchStatus();
           }}
           className="ml-auto text-xs underline"
         >
@@ -98,7 +97,7 @@ export function VpsQueueDashboard() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => fetchStatus()}
+          onClick={fetchStatus}
           className="gap-1.5"
         >
           <RefreshCw className="size-3.5" />
