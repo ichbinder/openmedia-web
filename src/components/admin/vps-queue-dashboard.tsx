@@ -18,7 +18,8 @@ export function VpsQueueDashboard() {
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(null);
 
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (withLoading = false) => {
+    if (withLoading) setLoading(true);
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -39,13 +40,15 @@ export function VpsQueueDashboard() {
       if ((err as Error).name !== "AbortError") {
         setError((err as Error).message);
       }
+    } finally {
+      if (withLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchStatus().finally(() => setLoading(false));
+    fetchStatus(true);
     // Auto-refresh every 30s
-    intervalRef.current = setInterval(fetchStatus, 30000);
+    intervalRef.current = setInterval(() => fetchStatus(), 30000);
     return () => {
       abortRef.current?.abort();
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -69,8 +72,7 @@ export function VpsQueueDashboard() {
         <button
           onClick={() => {
             setError(null);
-            setLoading(true);
-            fetchStatus().finally(() => setLoading(false));
+            fetchStatus(true);
           }}
           className="ml-auto text-xs underline"
         >
