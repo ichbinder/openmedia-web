@@ -185,16 +185,21 @@ export function VpsLocationsConfig() {
   };
 
   const fetchAll = useCallback(async () => {
+    setLoading(true);
     try {
-      const [entriesRes, locationsRes] = await Promise.all([
+      // Hetzner-Locations sind optional — bei Fehlschlag (HTTP oder Netzwerk)
+      // weiter mit Default-Fallback. Daher allSettled, damit ein einziger
+      // Netzwerkfehler im optionalen Fetch nicht den Pflicht-Fetch ausschliesst.
+      const [entriesResult, locationsResult] = await Promise.allSettled([
         fetch("/api/backend/admin/config/entries/vps"),
         fetch("/api/backend/admin/config/hetzner-locations"),
       ]);
 
-      if (!entriesRes.ok)
+      if (entriesResult.status === "rejected" || !entriesResult.value.ok) {
         throw new Error("VPS-Locations konnten nicht geladen werden.");
+      }
 
-      const entriesData = await entriesRes.json();
+      const entriesData = await entriesResult.value.json();
       const entries: { key: string; value: string }[] = entriesData.entries || [];
 
       for (const entry of entries) {
@@ -207,10 +212,8 @@ export function VpsLocationsConfig() {
         }
       }
 
-      // Hetzner-Locations sind optional — wenn der Endpunkt fehlschlaegt,
-      // zeigen wir die aktuelle Auswahl trotzdem editierbar an (mit Defaults).
-      if (locationsRes.ok) {
-        const locationsData = await locationsRes.json();
+      if (locationsResult.status === "fulfilled" && locationsResult.value.ok) {
+        const locationsData = await locationsResult.value.json();
         const list: HetznerLocation[] = Array.isArray(locationsData.locations)
           ? locationsData.locations
           : [];
@@ -231,11 +234,13 @@ export function VpsLocationsConfig() {
     } catch (err) {
       setError((err as Error).message);
       setLoadError(true);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchAll().finally(() => setLoading(false));
+    fetchAll();
   }, [fetchAll]);
 
   const validate = (): string | null => {
@@ -271,20 +276,21 @@ export function VpsLocationsConfig() {
         },
       ];
 
-      const results = await Promise.all(
-        puts.map((body) =>
-          fetch("/api/backend/admin/config/entries", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          }),
-        ),
-      );
-
-      for (const res of results) {
+      // Sequentiell speichern: wenn Download-PUT fehlschlaegt, wird der Upload-PUT
+      // nicht abgesendet — verhindert halb-applied State (eine Liste alt, andere neu).
+      for (let i = 0; i < puts.length; i++) {
+        const body = puts[i];
+        const res = await fetch("/api/backend/admin/config/entries", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Speichern fehlgeschlagen.");
+          const data = await res.json().catch(() => ({}));
+          const partial = i > 0 ? " (vorherige Aenderung wurde bereits gespeichert)" : "";
+          throw new Error(
+            (data.error || "Speichern fehlgeschlagen.") + partial,
+          );
         }
       }
 
@@ -318,8 +324,7 @@ export function VpsLocationsConfig() {
               setError(null);
               if (loadError) {
                 setLoadError(false);
-                setLoading(true);
-                fetchAll().finally(() => setLoading(false));
+                fetchAll();
               }
             }}
             className="ml-auto text-xs underline"
