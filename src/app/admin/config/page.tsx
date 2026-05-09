@@ -12,6 +12,7 @@ import { VpsEvents } from "@/components/admin/vps-events";
 import { VpsLimitConfig } from "@/components/admin/vps-limit-config";
 import { VpsServerTypesConfig } from "@/components/admin/vps-server-types-config";
 import { VpsQueueDashboard } from "@/components/admin/vps-queue-dashboard";
+import { ServiceIncidentBanner } from "@/components/admin/service-incident-banner";
 
 type AdminTab = "config" | "usenet" | "vpn" | "events";
 
@@ -29,6 +30,7 @@ export default function AdminConfigPage() {
 
         {user?.isAdmin ? (
           <div className="space-y-4">
+            <ServiceIncidentBanner />
             {/* Top-level tabs */}
             <div className="flex gap-2 border-b pb-2">
               <button
