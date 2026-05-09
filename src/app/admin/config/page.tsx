@@ -10,6 +10,7 @@ import { VpnProviders } from "@/components/admin/vpn-providers";
 import { VpnJobConfig } from "@/components/admin/vpn-job-config";
 import { VpsEvents } from "@/components/admin/vps-events";
 import { VpsLimitConfig } from "@/components/admin/vps-limit-config";
+import { VpsLocationsConfig } from "@/components/admin/vps-locations-config";
 import { VpsQueueDashboard } from "@/components/admin/vps-queue-dashboard";
 
 type AdminTab = "config" | "usenet" | "vpn" | "events";
@@ -82,6 +83,10 @@ export default function AdminConfigPage() {
                 <div>
                   <h3 className="mb-3 text-lg font-semibold">VPS-Limits</h3>
                   <VpsLimitConfig />
+                </div>
+                <div>
+                  <h3 className="mb-3 text-lg font-semibold">VPS-Locations</h3>
+                  <VpsLocationsConfig />
                 </div>
               </div>
             )}
