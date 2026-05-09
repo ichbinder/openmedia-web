@@ -12,38 +12,43 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const DEFAULT_LOCATIONS = ["hel1", "fsn1", "nbg1"];
+const DEFAULT_DOWNLOAD_SERVER_TYPES = ["cax21"];
+const DEFAULT_UPLOAD_SERVER_TYPES = ["cpx42"];
 
 const CONFIG_KEYS = {
-  download: "downloadLocations",
-  upload: "uploadLocations",
+  download: "downloadServerTypes",
+  upload: "uploadServerTypes",
 } as const;
 
-interface HetznerLocation {
+interface HetznerServerType {
   id: number;
   name: string;
   description: string;
-  country: string;
-  city: string;
-  network_zone: string;
+  cores: number;
+  memory: number;
+  disk: number;
+  cpuType: string;
+  architecture: string;
+  deprecated: boolean;
 }
 
 interface SortableListProps {
   label: string;
   helpText: string;
-  available: HetznerLocation[];
+  available: HetznerServerType[];
   selected: string[];
+  defaults: string[];
   onChange: (next: string[]) => void;
 }
 
-function describeLocation(name: string, available: HetznerLocation[]): string {
-  const match = available.find((l) => l.name === name);
+function describeServerType(name: string, available: HetznerServerType[]): string {
+  const match = available.find((s) => s.name === name);
   if (!match) return name;
-  const cityCountry = [match.city, match.country].filter(Boolean).join(", ");
-  return cityCountry ? `${name} — ${cityCountry}` : name;
+  const specs = `${match.cores} vCPU, ${match.memory} GB RAM, ${match.disk} GB SSD`;
+  return `${name} — ${specs} (${match.cpuType}/${match.architecture})`;
 }
 
-function SortableList({ label, helpText, available, selected, onChange }: SortableListProps) {
+function SortableList({ label, helpText, available, selected, defaults, onChange }: SortableListProps) {
   const [pickerValue, setPickerValue] = useState<string>("");
 
   const move = (idx: number, delta: number) => {
@@ -65,7 +70,7 @@ function SortableList({ label, helpText, available, selected, onChange }: Sortab
     setPickerValue("");
   };
 
-  const remaining = available.filter((l) => !selected.includes(l.name));
+  const remaining = available.filter((s) => !selected.includes(s.name));
 
   return (
     <div className="space-y-2">
@@ -75,7 +80,7 @@ function SortableList({ label, helpText, available, selected, onChange }: Sortab
       <ol className="space-y-1.5 rounded-md border bg-muted/30 p-2">
         {selected.length === 0 ? (
           <li className="px-2 py-1.5 text-xs text-muted-foreground italic">
-            Keine Locations ausgewaehlt — Default ({DEFAULT_LOCATIONS.join(", ")}) wird verwendet.
+            Keine Server-Types ausgewaehlt — Default ({defaults.join(", ")}) wird verwendet.
           </li>
         ) : (
           selected.map((name, idx) => (
@@ -87,7 +92,7 @@ function SortableList({ label, helpText, available, selected, onChange }: Sortab
                 {idx + 1}.
               </span>
               <span className="flex-1 truncate">
-                {describeLocation(name, available)}
+                {describeServerType(name, available)}
               </span>
               <Button
                 size="icon"
@@ -127,12 +132,12 @@ function SortableList({ label, helpText, available, selected, onChange }: Sortab
         <div className="flex items-center gap-2">
           <Select value={pickerValue} onValueChange={(v) => setPickerValue(v ?? "")}>
             <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Location hinzufuegen…" />
+              <SelectValue placeholder="Server-Type hinzufuegen…" />
             </SelectTrigger>
             <SelectContent>
-              {remaining.map((l) => (
-                <SelectItem key={l.name} value={l.name}>
-                  {describeLocation(l.name, available)}
+              {remaining.map((s) => (
+                <SelectItem key={s.name} value={s.name}>
+                  {describeServerType(s.name, available)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -153,10 +158,10 @@ function SortableList({ label, helpText, available, selected, onChange }: Sortab
   );
 }
 
-export function VpsLocationsConfig() {
-  const [download, setDownload] = useState<string[]>(DEFAULT_LOCATIONS);
-  const [upload, setUpload] = useState<string[]>(DEFAULT_LOCATIONS);
-  const [available, setAvailable] = useState<HetznerLocation[]>([]);
+export function VpsServerTypesConfig() {
+  const [download, setDownload] = useState<string[]>(DEFAULT_DOWNLOAD_SERVER_TYPES);
+  const [upload, setUpload] = useState<string[]>(DEFAULT_UPLOAD_SERVER_TYPES);
+  const [available, setAvailable] = useState<HetznerServerType[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -190,16 +195,16 @@ export function VpsLocationsConfig() {
 
   const fetchAll = useCallback(async () => {
     try {
-      // Hetzner-Locations sind optional — bei Fehlschlag (HTTP oder Netzwerk)
+      // Hetzner-ServerTypes sind optional — bei Fehlschlag (HTTP oder Netzwerk)
       // weiter mit Default-Fallback. Daher allSettled, damit ein einziger
       // Netzwerkfehler im optionalen Fetch nicht den Pflicht-Fetch ausschliesst.
-      const [entriesResult, locationsResult] = await Promise.allSettled([
+      const [entriesResult, serverTypesResult] = await Promise.allSettled([
         fetch("/api/backend/admin/config/entries/vps"),
-        fetch("/api/backend/admin/config/hetzner-locations"),
+        fetch("/api/backend/admin/config/hetzner-server-types"),
       ]);
 
       if (entriesResult.status === "rejected" || !entriesResult.value.ok) {
-        throw new Error("VPS-Locations konnten nicht geladen werden.");
+        throw new Error("VPS-Server-Types konnten nicht geladen werden.");
       }
 
       const entriesData = await entriesResult.value.json();
@@ -215,22 +220,28 @@ export function VpsLocationsConfig() {
         }
       }
 
-      if (locationsResult.status === "fulfilled" && locationsResult.value.ok) {
-        const locationsData = await locationsResult.value.json();
-        const list: HetznerLocation[] = Array.isArray(locationsData.locations)
-          ? locationsData.locations
+      if (serverTypesResult.status === "fulfilled" && serverTypesResult.value.ok) {
+        const stData = await serverTypesResult.value.json();
+        const list: HetznerServerType[] = Array.isArray(stData.serverTypes)
+          ? stData.serverTypes
           : [];
         setAvailable(list);
       } else {
         // Fallback: minimale Liste damit man ueberhaupt was auswaehlen kann.
+        const fallbackNames = Array.from(
+          new Set([...DEFAULT_DOWNLOAD_SERVER_TYPES, ...DEFAULT_UPLOAD_SERVER_TYPES]),
+        );
         setAvailable(
-          DEFAULT_LOCATIONS.map((name, id) => ({
+          fallbackNames.map((name, id) => ({
             id,
             name,
             description: name,
-            country: "",
-            city: "",
-            network_zone: "",
+            cores: 0,
+            memory: 0,
+            disk: 0,
+            cpuType: "",
+            architecture: "",
+            deprecated: false,
           })),
         );
       }
@@ -249,9 +260,9 @@ export function VpsLocationsConfig() {
 
   const validate = (): string | null => {
     if (download.length === 0)
-      return "Mindestens eine Download-Location auswaehlen.";
+      return "Mindestens einen Download-Server-Type auswaehlen.";
     if (upload.length === 0)
-      return "Mindestens eine Upload-Location auswaehlen.";
+      return "Mindestens einen Upload-Server-Type auswaehlen.";
     return null;
   };
 
@@ -312,7 +323,7 @@ export function VpsLocationsConfig() {
     return (
       <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
-        Lade VPS-Locations…
+        Lade VPS-Server-Types…
       </div>
     );
   }
@@ -341,17 +352,19 @@ export function VpsLocationsConfig() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <SortableList
-          label="Download-VPS Locations"
-          helpText="Reihenfolge = Prioritaet. Bei Kapazitaetsengpass wird die naechste Location probiert."
+          label="Download-VPS Server-Types"
+          helpText="Reihenfolge = Prioritaet. Bei Kapazitaetsengpass wird der naechste Server-Type probiert."
           available={available}
           selected={download}
+          defaults={DEFAULT_DOWNLOAD_SERVER_TYPES}
           onChange={setDownload}
         />
         <SortableList
-          label="Upload-VPS Locations"
-          helpText="Eigene Liste fuer Upload-Server. Erste verfuegbare Location wird genutzt."
+          label="Upload-VPS Server-Types"
+          helpText="Eigene Liste fuer Upload-Server. Erste verfuegbare Variante wird genutzt."
           available={available}
           selected={upload}
+          defaults={DEFAULT_UPLOAD_SERVER_TYPES}
           onChange={setUpload}
         />
       </div>
