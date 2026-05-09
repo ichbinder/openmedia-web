@@ -175,9 +175,13 @@ export function VpsLocationsConfig() {
     try {
       const parsed = JSON.parse(value);
       if (!Array.isArray(parsed)) return null;
-      const cleaned = parsed
-        .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
-        .map((v) => v.trim());
+      const cleaned = Array.from(
+        new Set(
+          parsed
+            .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+            .map((v) => v.trim()),
+        ),
+      );
       return cleaned.length > 0 ? cleaned : null;
     } catch {
       return null;
@@ -185,7 +189,6 @@ export function VpsLocationsConfig() {
   };
 
   const fetchAll = useCallback(async () => {
-    setLoading(true);
     try {
       // Hetzner-Locations sind optional — bei Fehlschlag (HTTP oder Netzwerk)
       // weiter mit Default-Fallback. Daher allSettled, damit ein einziger
@@ -240,6 +243,7 @@ export function VpsLocationsConfig() {
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     fetchAll();
   }, [fetchAll]);
 
@@ -324,6 +328,7 @@ export function VpsLocationsConfig() {
               setError(null);
               if (loadError) {
                 setLoadError(false);
+                setLoading(true);
                 fetchAll();
               }
             }}
