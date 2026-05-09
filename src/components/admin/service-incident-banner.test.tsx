@@ -28,11 +28,42 @@ describe("ServiceIncidentBanner", () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/backend/admin/config/incidents",
+        "/api/backend/admin/config/incidents?active=1",
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
     expect(container.firstChild).toBeNull();
+  });
+
+  it("pollt Incidents alle 30 Sekunden", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ incidents: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ incidents: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ incidents: [] }) });
+
+      render(<ServiceIncidentBanner />);
+
+      // Initial fetch on mount
+      await vi.waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      // First poll tick
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+
+      // Second poll tick
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledTimes(3);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rendert eine Incident-Liste mit Service, Message und Occurrences", async () => {

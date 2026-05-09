@@ -26,22 +26,40 @@ function formatRelative(iso: string): string {
   return `vor ${diffDay}d`;
 }
 
+const POLL_INTERVAL_MS = 30_000;
+
 export function ServiceIncidentBanner() {
   const [incidents, setIncidents] = useState<ServiceIncident[]>([]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/backend/admin/config/incidents", { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.incidents && Array.isArray(data.incidents)) {
-          setIncidents(data.incidents);
-        }
-      })
-      .catch(() => {
-        // Silent fail — Banner ist nur informativ
-      });
-    return () => controller.abort();
+    let activeController: AbortController | null = null;
+
+    const fetchIncidents = () => {
+      // Abort any previous in-flight request before starting a new one,
+      // so a slow response can't overwrite a fresh tick's data.
+      activeController?.abort();
+      const controller = new AbortController();
+      activeController = controller;
+
+      fetch("/api/backend/admin/config/incidents?active=1", { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.incidents && Array.isArray(data.incidents)) {
+            setIncidents(data.incidents);
+          }
+        })
+        .catch(() => {
+          // Silent fail — Banner ist nur informativ
+        });
+    };
+
+    fetchIncidents();
+    const intervalId = setInterval(fetchIncidents, POLL_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
+      activeController?.abort();
+    };
   }, []);
 
   if (incidents.length === 0) return null;
