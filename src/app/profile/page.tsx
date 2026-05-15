@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
-import { User, Key, Settings } from "lucide-react";
+import { User, Key, Settings, Server } from "lucide-react";
 import { ApiTokenManager } from "@/components/profile/api-tokens";
+import { JellyfinPluginSetup } from "@/components/profile/jellyfin-plugin-setup";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
 export default function ProfilePage() {
@@ -49,6 +50,20 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+
+        {/* Jellyfin Plugin Setup */}
+        <div className="mt-8">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Server className="size-5" />
+            Jellyfin Plugin
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Verbinde dein Jellyfin mit openmedia für automatische Bibliotheks-Synchronisation.
+          </p>
+          <div className="mt-4">
+            <JellyfinPluginSetup />
+          </div>
+        </div>
 
         {/* API Tokens */}
         <div className="mt-8">
