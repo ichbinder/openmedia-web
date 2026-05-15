@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Copy, Check, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Copy, Check, AlertCircle, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,11 +22,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ApiToken {
   id: string;
   tokenPrefix: string;
   name: string;
+  purpose?: string | null;
+  label?: string | null;
   expiresAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -123,8 +136,6 @@ export function ApiTokenManager() {
   }
 
   async function handleRevoke(id: string) {
-    const confirmed = window.confirm("Token wirklich widerrufen? Dies kann nicht rückgängig gemacht werden.");
-    if (!confirmed) return;
     setDeletingId(id);
     try {
       const res = await fetch(`/api/backend/auth/api-tokens/${id}`, { method: "DELETE" });
@@ -259,6 +270,10 @@ export function ApiTokenManager() {
           {tokens.map((token) => {
             const status = tokenStatus(token);
             const isActive = !token.revokedAt && new Date(token.expiresAt) >= new Date();
+            const isJellyfin = token.purpose === "jellyfin-plugin";
+            const displayLabel = isJellyfin
+              ? token.label || `Jellyfin Plugin (${formatDate(token.createdAt)})`
+              : null;
 
             return (
               <div
@@ -267,19 +282,60 @@ export function ApiTokenManager() {
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{token.name}</span>
+                    {isJellyfin && <Server className="size-4 text-cinema-gold" />}
+                    <span className="font-medium">
+                      {isJellyfin ? "Jellyfin Plugin" : token.name}
+                    </span>
                     <Badge variant={status.variant}>{status.label}</Badge>
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    <span>
-                      <code className="rounded bg-muted px-1">{token.tokenPrefix}…</code>
-                    </span>
+                    {isJellyfin ? (
+                      <span>{displayLabel}</span>
+                    ) : (
+                      <span>
+                        <code className="rounded bg-muted px-1">{token.tokenPrefix}…</code>
+                      </span>
+                    )}
                     <span>Erstellt: {formatDate(token.createdAt)}</span>
                     <span>Ablauf: {formatDate(token.expiresAt)}</span>
                     <span>Letzter Zugriff: {formatDateTime(token.lastUsedAt)}</span>
                   </div>
                 </div>
-                {isActive && (
+                {isActive && isJellyfin && (
+                  <AlertDialog>
+                    <AlertDialogTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={deletingId === token.id}
+                        >
+                          <Trash2 className="mr-1.5 size-4" />
+                          {deletingId === token.id ? "…" : "Löschen"}
+                        </Button>
+                      }
+                    />
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Jellyfin Plugin Token löschen?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Jellyfin-Plugin-Sync wird sofort gestoppt.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                        <AlertDialogAction
+                          variant="destructive"
+                          onClick={() => handleRevoke(token.id)}
+                        >
+                          Löschen
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+                {isActive && !isJellyfin && (
                   <Button
                     variant="ghost"
                     size="sm"
