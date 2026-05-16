@@ -9,7 +9,7 @@ import { Download, Loader2, CheckCircle, AlertCircle, Clock } from "lucide-react
 
 // ── Types ──────────────────────────────────────────────────
 
-type PrecacheState = "idle" | "queued" | "downloading" | "done" | "failed";
+type PrecacheState = "idle" | "queued" | "downloading" | "done" | "failed" | "release_requested";
 
 interface PrecacheStatus {
   state: PrecacheState;
@@ -21,6 +21,21 @@ interface PrecacheStatus {
 
 interface PrecacheButtonProps {
   movieHash: string;
+}
+
+// ── Reason Mapping (German) ────────────────────────────────
+
+const REASON_MAP: Record<string, string> = {
+  insufficient_disk: "Speicher reicht nicht (Server)",
+  disk_full_during_download: "Speicher voll während Download",
+  sha_mismatch: "Datei beschädigt (Hash-Mismatch)",
+  sha_verify_failed: "Hash-Verify fehlgeschlagen",
+  api_error: "Server antwortet nicht",
+};
+
+function mapReason(reason: string | null): string | null {
+  if (!reason) return null;
+  return REASON_MAP[reason] ?? reason;
 }
 
 // ── Helpers ────────────────────────────────────────────────
@@ -49,6 +64,8 @@ function computeVariant(
       return "outline";
     case "failed":
       return "destructive";
+    case "release_requested":
+      return "secondary";
   }
 }
 
@@ -75,7 +92,7 @@ export function PrecacheButton({ movieHash }: PrecacheButtonProps) {
     );
 
     if (!res.ok || res.status === 404) {
-      // 404 → idle (no row exists yet)
+      // 404 → idle (no row exists yet, or row was deleted after release)
       setState("idle");
       setReason(null);
       setLastEventAt(null);
@@ -90,7 +107,8 @@ export function PrecacheButton({ movieHash }: PrecacheButtonProps) {
       data.state === "queued" ||
       data.state === "downloading" ||
       data.state === "done" ||
-      data.state === "failed"
+      data.state === "failed" ||
+      data.state === "release_requested"
     ) {
       parsedState = data.state;
     }
@@ -125,7 +143,7 @@ export function PrecacheButton({ movieHash }: PrecacheButtonProps) {
       pollRef.current = null;
     }
 
-    if (state === "queued" || state === "downloading") {
+    if (state === "queued" || state === "downloading" || state === "release_requested") {
       pollRef.current = setInterval(fetchState, 5000);
     }
 
@@ -164,6 +182,32 @@ export function PrecacheButton({ movieHash }: PrecacheButtonProps) {
     }
   }
 
+  // ── Release handler ──────────────────────────────────
+
+  async function handleRelease() {
+    const token = getToken();
+    if (!token || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const res = await backendFetch<PrecacheStatus>(
+        `/jellyfin/precache/${movieHash}`,
+        { method: "DELETE", token },
+      );
+
+      if (res.ok) {
+        // Optimistic update
+        setState("release_requested");
+        setReason(null);
+        setLastEventAt(new Date().toISOString());
+      } else {
+        await fetchState();
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   // ── Progress percentage ───────────────────────────────
 
   const progressPct =
@@ -188,6 +232,7 @@ export function PrecacheButton({ movieHash }: PrecacheButtonProps) {
           state === "queued" ||
           state === "downloading" ||
           state === "done" ||
+          state === "release_requested" ||
           isLoading
         }
         data-precache-state={state}
@@ -222,18 +267,36 @@ export function PrecacheButton({ movieHash }: PrecacheButtonProps) {
             Erneut versuchen
           </>
         )}
+        {state === "release_requested" && (
+          <>
+            <Clock className="size-3.5 animate-pulse" />
+            Wird freigegeben…
+          </>
+        )}
       </Button>
 
       {state === "failed" && reason && (
-        <Badge variant="destructive" title={reason}>
-          Fehler
+        <Badge variant="destructive" title={reason} data-precache-reason={reason}>
+          {mapReason(reason)}
         </Badge>
       )}
 
       {state === "done" && (
-        <Badge variant="secondary">
-          Bereit
-        </Badge>
+        <>
+          <Badge variant="secondary">
+            Bereit
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive text-xs"
+            onClick={handleRelease}
+            disabled={isLoading}
+            data-precache-action="release"
+          >
+            Freigeben
+          </Button>
+        </>
       )}
     </div>
   );

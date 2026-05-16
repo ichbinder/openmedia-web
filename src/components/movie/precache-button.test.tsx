@@ -190,10 +190,10 @@ describe("PrecacheButton", () => {
     expect(mockFetch.mock.calls.length).toBe(fetchCountAfterDone);
   });
 
-  it("shows failed state with reason badge", async () => {
+  it("shows failed state with reason badge mapped to German", async () => {
     // Initial GET → failed state
     mockGetState("failed", {
-      reason: "Disk full on Jellyfin server",
+      reason: "insufficient_disk",
     });
 
     render(<PrecacheButton movieHash="abc123" />);
@@ -206,8 +206,27 @@ describe("PrecacheButton", () => {
     expect(button).toHaveAttribute("data-precache-state", "failed");
     expect(button).toBeEnabled();
 
-    // Reason shown as badge
-    expect(screen.getByText("Fehler")).toBeInTheDocument();
+    // Reason shown as mapped German text
+    expect(screen.getByText("Speicher reicht nicht (Server)")).toBeInTheDocument();
+
+    // Badge has data-precache-reason attribute
+    const badge = screen.getByText("Speicher reicht nicht (Server)");
+    expect(badge).toHaveAttribute("data-precache-reason", "insufficient_disk");
+  });
+
+  it("shows raw reason string for unknown failure reasons", async () => {
+    mockGetState("failed", {
+      reason: "some_unknown_error",
+    });
+
+    render(<PrecacheButton movieHash="abc123" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("some_unknown_error")).toBeInTheDocument();
+    });
+
+    const badge = screen.getByText("some_unknown_error");
+    expect(badge).toHaveAttribute("data-precache-reason", "some_unknown_error");
   });
 
   it("shows done state with badge", async () => {
@@ -220,7 +239,7 @@ describe("PrecacheButton", () => {
       expect(screen.getByText("Auf Server bereit")).toBeInTheDocument();
     });
 
-    const button = screen.getByRole("button");
+    const button = screen.getByRole("button", { name: /Auf Server bereit/ });
     expect(button).toHaveAttribute("data-precache-state", "done");
     expect(button).toBeDisabled();
 
@@ -241,5 +260,100 @@ describe("PrecacheButton", () => {
     // Should show idle (default state) but no fetch calls
     expect(screen.getByText("Für heute Abend laden")).toBeInTheDocument();
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  // ── Freigeben (release) tests ────────────────────────
+
+  it("shows Freigeben button in done state", async () => {
+    mockGetState("done");
+
+    render(<PrecacheButton movieHash="abc123" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Auf Server bereit")).toBeInTheDocument();
+    });
+
+    const releaseButton = screen.getByText("Freigeben");
+    expect(releaseButton).toBeInTheDocument();
+    expect(releaseButton).toHaveAttribute("data-precache-action", "release");
+  });
+
+  it("clicks Freigeben → DELETE request fired, optimistic state=release_requested", async () => {
+    // Initial GET → done
+    mockGetState("done");
+    // DELETE response → release_requested
+    mockBackendResponse(true, 200, {
+      state: "release_requested",
+      lastEventAt: new Date().toISOString(),
+    });
+
+    render(<PrecacheButton movieHash="abc123" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Auf Server bereit")).toBeInTheDocument();
+    });
+
+    // Click Freigeben
+    const releaseButton = screen.getByText("Freigeben");
+    await act(async () => {
+      fireEvent.click(releaseButton);
+    });
+
+    // DELETE was called
+    const deleteCall = mockFetch.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === "string" &&
+        (call[1] as Record<string, unknown> | undefined)?.method === "DELETE",
+    );
+    expect(deleteCall).toBeDefined();
+    expect((deleteCall as unknown[])[0]).toContain("/jellyfin/precache/abc123");
+
+    // Optimistic state → release_requested
+    await waitFor(() => {
+      expect(screen.getByText("Wird freigegeben…")).toBeInTheDocument();
+    });
+  });
+
+  it("release_requested state polls until 404 → idle", async () => {
+    // Initial GET → release_requested
+    mockGetState("release_requested");
+    // First poll → 404 (row deleted)
+    mockBackendResponse(false, 404, { error: "Not found" });
+
+    render(<PrecacheButton movieHash="abc123" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Wird freigegeben…")).toBeInTheDocument();
+    });
+
+    // Advance 5s → poll fires → 404 → idle
+    await act(async () => {
+      vi.advanceTimersByTime(5_100);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Für heute Abend laden")).toBeInTheDocument();
+    });
+  });
+
+  it("maps all known failure reasons to German text", async () => {
+    const reasons = [
+      { raw: "disk_full_during_download", german: "Speicher voll während Download" },
+      { raw: "sha_mismatch", german: "Datei beschädigt (Hash-Mismatch)" },
+      { raw: "api_error", german: "Server antwortet nicht" },
+    ];
+
+    for (const { raw, german } of reasons) {
+      mockFetch.mockReset();
+      mockGetState("failed", { reason: raw });
+
+      render(<PrecacheButton movieHash="test-hash" />);
+
+      await waitFor(() => {
+        expect(screen.getByText(german)).toBeInTheDocument();
+      });
+
+      cleanup();
+    }
   });
 });
