@@ -34,6 +34,7 @@ export function RecentSearches() {
 
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setItems([]);
       setIsLoading(false);
       return;

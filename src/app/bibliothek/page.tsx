@@ -44,6 +44,7 @@ function LibraryCard({
     ? new Date(item.nzbFile.scheduledDeletionAt)
     : null;
   const daysUntilDeletion = scheduledDeletion
+    // eslint-disable-next-line react-hooks/purity
     ? Math.max(0, Math.ceil((scheduledDeletion.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : null;
 
@@ -199,6 +200,7 @@ function LibraryContent() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (user) fetchLibrary();
   }, [user, fetchLibrary]);
 

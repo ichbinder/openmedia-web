@@ -216,6 +216,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoading(true);
       // First fetch: populate prevStatusMap WITHOUT triggering toasts by
       // bypassing notifyTransitions, then flip isInitializedRef so the next

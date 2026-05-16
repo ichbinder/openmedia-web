@@ -40,6 +40,7 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   // Load watchlist from API when user changes
   useEffect(() => {
     if (!user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setItems([]);
       setIsLoading(false);
       return;
