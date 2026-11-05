@@ -27,20 +27,43 @@ export function MovieHeroWithPlayer({
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [isLoadingStream, setIsLoadingStream] = useState(false);
 
+  const startStream = useCallback(
+    async (fileId: string) => {
+      setIsLoadingStream(true);
+      try {
+        const url = await getStreamUrl(fileId);
+        if (url) {
+          setStreamUrl(url);
+          setIsPlaying(true);
+        } else {
+          toast.error("Stream konnte nicht gestartet werden", {
+            description: "Der Download-Link konnte nicht abgerufen werden.",
+          });
+        }
+      } catch (err) {
+        console.error("[MovieHeroWithPlayer] Failed to get stream URL:", err);
+        toast.error("Stream fehlgeschlagen", {
+          description: "Bitte versuche es später erneut.",
+        });
+      } finally {
+        setIsLoadingStream(false);
+      }
+    },
+    [getStreamUrl],
+  );
+
   // Track the best available file (with s3StreamKey) for this movie
-  const [streamableFileId, setStreamableFileId] = useState<string | null>(null);
-  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
+  const userId = user?.id;
+  const checkKey = userId ? `${userId}|${movie.id}` : null;
+  const [availability, setAvailability] = useState<{ key: string; fileId: string | null } | null>(null);
+  const isCheckingAvailability = checkKey !== null && availability?.key !== checkKey;
+  const streamableFileId = checkKey !== null && availability?.key === checkKey ? availability.fileId : null;
 
   // Check if this movie has a streamable file in the user's library
-  const userId = user?.id;
   useEffect(() => {
-    if (!userId) {
-      setStreamableFileId(null);
-      return;
-    }
-
+    if (!userId) return;
+    const key = `${userId}|${movie.id}`;
     let cancelled = false;
-    setIsCheckingAvailability(true);
 
     checkAvailability(movie.id)
       .then((files) => {
@@ -53,57 +76,31 @@ export function MovieHeroWithPlayer({
           .sort((a, b) => {
             return qualityRank(a.qualityTier || a.resolution) - qualityRank(b.qualityTier || b.resolution);
           });
+        const fileId = streamable[0]?.id ?? null;
+        setAvailability({ key, fileId });
 
-        setStreamableFileId(streamable[0]?.id ?? null);
+        // Auto-play when navigated with #play hash (from library page)
+        if (fileId && window.location.hash === "#play") {
+          startStream(fileId);
+          // Clean hash from URL without triggering navigation
+          window.history.replaceState(null, "", window.location.pathname);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
         console.error("[MovieHeroWithPlayer] Availability check failed:", err);
-        setStreamableFileId(null);
-      })
-      .finally(() => {
-        if (!cancelled) setIsCheckingAvailability(false);
+        setAvailability({ key, fileId: null });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [userId, movie.id, checkAvailability]);
+  }, [userId, movie.id, checkAvailability, startStream]);
 
-  // Auto-play when navigated with #play hash (from library page)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (window.location.hash === "#play" && streamableFileId && !isPlaying) {
-      handlePlay();
-      // Clean hash from URL without triggering navigation
-      window.history.replaceState(null, "", window.location.pathname);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally omit handlePlay/isPlaying to trigger auto-play only once when streamableFileId becomes available
-  }, [streamableFileId]);
-
-  const handlePlay = useCallback(async () => {
+  const handlePlay = useCallback(() => {
     if (!streamableFileId || isLoadingStream) return;
-
-    setIsLoadingStream(true);
-    try {
-      const url = await getStreamUrl(streamableFileId);
-      if (url) {
-        setStreamUrl(url);
-        setIsPlaying(true);
-      } else {
-        toast.error("Stream konnte nicht gestartet werden", {
-          description: "Der Download-Link konnte nicht abgerufen werden.",
-        });
-      }
-    } catch (err) {
-      console.error("[MovieHeroWithPlayer] Failed to get stream URL:", err);
-      toast.error("Stream fehlgeschlagen", {
-        description: "Bitte versuche es später erneut.",
-      });
-    } finally {
-      setIsLoadingStream(false);
-    }
-  }, [streamableFileId, isLoadingStream, getStreamUrl]);
+    startStream(streamableFileId);
+  }, [streamableFileId, isLoadingStream, startStream]);
 
   const handleClose = useCallback(() => {
     setIsPlaying(false);

@@ -146,7 +146,7 @@ test.describe("Download job lifecycle", () => {
   // ── 1. Full lifecycle ──────────────────────────────────────────────────
 
   test("full lifecycle: queued → provisioning → downloading → uploading → force-complete → completed", async () => {
-    const { token, userId } = await registerTestUser();
+    const { token } = await registerTestUser();
     const { jobId, nzbFileId } = await createQueuedJob(token);
 
     // Verify starting status
@@ -346,7 +346,7 @@ test.describe("Download job lifecycle", () => {
 
     // Create two jobs
     const job1 = await createQueuedJob(token);
-    const job2 = await createQueuedJob(token);
+    await createQueuedJob(token);
 
     // Force-complete job1
     await forceCompleteJob(job1.jobId);

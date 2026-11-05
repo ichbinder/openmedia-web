@@ -86,24 +86,6 @@ export function ConfigManager() {
   // History dialog
   const [historyTarget, setHistoryTarget] = useState<{ category: string; key: string } | null>(null);
 
-  // Fetch categories
-  const fetchCategories = useCallback(async () => {
-    try {
-      const res = await fetch("/api/backend/admin/config/categories");
-      if (!res.ok) throw new Error("Kategorien konnten nicht geladen werden.");
-      const data = await res.json();
-      setCategories(data.categories || []);
-      if (data.categories?.length > 0 && !selectedCategory) {
-        setSelectedCategory(data.categories[0].name);
-      }
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- only fetch on mount, selectedCategory is read inside but shouldn't trigger re-fetch
-  }, []);
-
   // Fetch entries for selected category
   const fetchEntries = useCallback(async (categoryName: string) => {
     const requestId = ++fetchEntriesIdRef.current;
@@ -125,15 +107,36 @@ export function ConfigManager() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+  const selectCategory = useCallback(
+    (categoryName: string) => {
+      setSelectedCategory(categoryName);
+      fetchEntries(categoryName);
+    },
+    [fetchEntries],
+  );
+
+  // Fetch categories
+  const fetchCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/backend/admin/config/categories");
+      if (!res.ok) throw new Error("Kategorien konnten nicht geladen werden.");
+      const data = await res.json();
+      setCategories(data.categories || []);
+      if (data.categories?.length > 0 && !selectedCategory) {
+        selectCategory(data.categories[0].name);
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only fetch on mount, selectedCategory is read inside but shouldn't trigger re-fetch
+  }, []);
 
   useEffect(() => {
-    if (selectedCategory) {
-      fetchEntries(selectedCategory);
-    }
-  }, [selectedCategory, fetchEntries]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch; setState runs after await, the rule cannot tell
+    fetchCategories();
+  }, [fetchCategories]);
 
   // Reveal a secret value
   const handleReveal = async (entry: ConfigEntry) => {
@@ -307,7 +310,7 @@ export function ConfigManager() {
         {categories.map((cat) => (
           <button
             key={cat.name}
-            onClick={() => setSelectedCategory(cat.name)}
+            onClick={() => cat.name !== selectedCategory && selectCategory(cat.name)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               selectedCategory === cat.name
                 ? "bg-primary text-primary-foreground"

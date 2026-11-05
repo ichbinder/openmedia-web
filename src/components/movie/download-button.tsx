@@ -45,20 +45,22 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
   const router = useRouter();
 
   const [nzbFiles, setNzbFiles] = useState<NzbFileInfo[]>([]);
-  const [isChecking, setIsChecking] = useState(false);
+  const [checkedFor, setCheckedFor] = useState<string | null>(null);
   const [startingId, setStartingId] = useState<string | null>(null);
+
+  const checkKey = user ? `${user.id}|${movie.id}` : null;
+  const isChecking = checkKey !== null && checkedFor !== checkKey;
 
   // Fetch NZB files for this movie
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    setIsChecking(true);
     checkAvailability(movie.id)
       .then((files) => {
         if (!cancelled) setNzbFiles(files);
       })
       .finally(() => {
-        if (!cancelled) setIsChecking(false);
+        if (!cancelled) setCheckedFor(`${user.id}|${movie.id}`);
       });
     return () => {
       cancelled = true;

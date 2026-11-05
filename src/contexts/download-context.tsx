@@ -16,7 +16,6 @@ import {
   type DownloadJob,
   type NzbFileInfo,
   createDownloadJob,
-  getDownloadJob,
   getDownloadJobs,
   deleteDownloadJob,
   getNzbMovieByTmdb,
