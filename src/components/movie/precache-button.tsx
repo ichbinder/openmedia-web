@@ -131,6 +131,7 @@ export function PrecacheButton({ movieHash }: PrecacheButtonProps) {
   // ── Initial fetch ─────────────────────────────────────
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch; setState runs after await, the rule cannot tell
     fetchState();
   }, [fetchState]);
 

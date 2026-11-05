@@ -52,9 +52,7 @@ export function VpsEvents() {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setLoading(true);
     try {
-      setError(null);
       const params = new URLSearchParams();
       params.set("limit", String(limit));
       params.set("offset", String(page * limit));
@@ -77,25 +75,39 @@ export function VpsEvents() {
     }
   }, [page, jobTypeFilter, severityFilter]);
 
+  const reload = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    fetchEvents();
+  }, [fetchEvents]);
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch; setState runs after await, the rule cannot tell
     fetchEvents();
     return () => abortRef.current?.abort();
   }, [fetchEvents]);
 
   // Auto-refresh every 30s
   useEffect(() => {
-    const interval = setInterval(fetchEvents, 30_000);
+    const interval = setInterval(reload, 30_000);
     return () => clearInterval(interval);
-  }, [fetchEvents]);
+  }, [reload]);
 
   const totalPages = Math.ceil(total / limit);
 
   // Clamp page when total shrinks (e.g. auto-refresh returns fewer results)
-  useEffect(() => {
-    if (totalPages > 0 && page >= totalPages) {
-      setPage(Math.max(0, totalPages - 1));
-    }
-  }, [total, totalPages, page]);
+  if (totalPages > 0 && page >= totalPages) {
+    setPage(Math.max(0, totalPages - 1));
+  }
+
+  // Show loading state as soon as page or filters change
+  const query = `${page}|${jobTypeFilter}|${severityFilter}`;
+  const [loadingQuery, setLoadingQuery] = useState(query);
+  if (loadingQuery !== query) {
+    setLoadingQuery(query);
+    setLoading(true);
+    setError(null);
+  }
 
   if (loading && events.length === 0) {
     return (
@@ -109,7 +121,7 @@ export function VpsEvents() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">VPS Events</h3>
-        <Button variant="ghost" size="sm" onClick={fetchEvents} disabled={loading} aria-label="Events aktualisieren">
+        <Button variant="ghost" size="sm" onClick={reload} disabled={loading} aria-label="Events aktualisieren">
           <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>

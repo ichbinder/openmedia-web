@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,10 +51,12 @@ export function VpnProviderDialog({
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detectedProtocol, setDetectedProtocol] = useState<"wireguard" | "openvpn" | null>(null);
+  const detectedProtocol = configBlob.trim() ? detectProtocol(configBlob) : (provider?.protocol ?? null);
 
   // Reset form when dialog opens/provider changes
-  useEffect(() => {
+  const [syncedWith, setSyncedWith] = useState<{ open: boolean; provider: VpnProvider | null } | null>(null);
+  if (syncedWith?.open !== open || syncedWith?.provider !== provider) {
+    setSyncedWith({ open, provider });
     if (open) {
       if (provider) {
         setName(provider.name);
@@ -62,27 +64,16 @@ export function VpnProviderDialog({
         setUsername(provider.username || "");
         setPassword("");
         setEnabled(provider.enabled);
-        setDetectedProtocol(provider.protocol);
       } else {
         setName("");
         setConfigBlob("");
         setUsername("");
         setPassword("");
         setEnabled(true);
-        setDetectedProtocol(null);
       }
       setError(null);
     }
-  }, [open, provider]);
-
-  // Detect protocol on configBlob change
-  useEffect(() => {
-    if (configBlob.trim()) {
-      setDetectedProtocol(detectProtocol(configBlob));
-    } else {
-      setDetectedProtocol(null);
-    }
-  }, [configBlob]);
+  }
 
   const handleSubmit = async () => {
     if (!name.trim()) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +47,9 @@ export function UsenetProviderDialog({
   const [error, setError] = useState<string | null>(null);
 
   // Reset form when dialog opens/provider changes
-  useEffect(() => {
+  const [syncedWith, setSyncedWith] = useState<{ open: boolean; provider: UsenetProvider | null } | null>(null);
+  if (syncedWith?.open !== open || syncedWith?.provider !== provider) {
+    setSyncedWith({ open, provider });
     if (open) {
       if (provider) {
         setName(provider.name);
@@ -78,7 +80,7 @@ export function UsenetProviderDialog({
       }
       setError(null);
     }
-  }, [open, provider]);
+  }
 
   const handleSubmit = async () => {
     // Client-side validation

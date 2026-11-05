@@ -160,7 +160,7 @@ test.describe("SABnzbd endpoints and download link edge cases", () => {
 
   test("GET /downloads/jobs/:id/link respects S3 availability", async () => {
     const { token } = await registerTestUser();
-    const { jobId, nzbFileId } = await createQueuedJob(token);
+    const { jobId } = await createQueuedJob(token);
 
     // Force-complete — sets fake S3 keys
     const completion = await forceCompleteJob(jobId);

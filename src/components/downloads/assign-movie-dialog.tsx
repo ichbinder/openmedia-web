@@ -78,76 +78,58 @@ export function AssignMovieDialog({
   onAssigned,
 }: AssignMovieDialogProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<TmdbSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [found, setFound] = useState<{ query: string; results: TmdbSearchResult[] } | null>(null);
   const [submittingTmdbId, setSubmittingTmdbId] = useState<number | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
+
+  const trimmedQuery = query.trim();
+  const searching = trimmedQuery.length >= 2;
+  const loading = searching && found?.query !== trimmedQuery;
+  const results = searching && found?.query === trimmedQuery ? found.results : [];
 
   // Pre-populate the search with a guess derived from the NZB filename
   // when the dialog opens — saves the user from typing in 80% of cases.
-  useEffect(() => {
+  // Reset state when the dialog closes so re-opening starts fresh.
+  const [prevOpen, setPrevOpen] = useState(false);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open && hint?.filename && !query) {
       const guess = guessTitleFromFilename(hint.filename);
       if (guess.length >= 2) {
         setQuery(guess);
       }
     }
-    // Reset state when the dialog closes so re-opening starts fresh.
     if (!open) {
       setQuery("");
-      setResults([]);
-      setLoading(false);
+      setFound(null);
       setSubmittingTmdbId(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }
 
   // Debounced search trigger.
   useEffect(() => {
-    if (!open) return;
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    const trimmed = query.trim();
-    if (trimmed.length < 2) {
-      // Any pending/in-flight response must be invalidated too.
-      requestIdRef.current++;
-      setResults([]);
-      setLoading(false);
-      return;
-    }
-
-    // Bump the request id SYNCHRONOUSLY when scheduling a new search, not
-    // when the timer fires. Otherwise two fast consecutive queries could
-    // fire their timers close enough together that both see the same
-    // requestId after increment and the older result overwrites the fresher
-    // one.
+    // Bump the request id SYNCHRONOUSLY when the query changes, not when the
+    // timer fires. This also invalidates any in-flight response, so an older
+    // result can never overwrite a fresher one.
     const myRequestId = ++requestIdRef.current;
-    setLoading(true);
+    if (!open || trimmedQuery.length < 2) return;
 
-    debounceRef.current = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
-        const found = await searchTmdbForAssign(trimmed);
+        const results = await searchTmdbForAssign(trimmedQuery);
         if (myRequestId === requestIdRef.current) {
-          setResults(found);
-          setLoading(false);
+          setFound({ query: trimmedQuery, results });
         }
       } catch (err) {
         if (myRequestId === requestIdRef.current) {
           console.error("[assign-dialog] search failed", err);
-          setResults([]);
-          setLoading(false);
+          setFound({ query: trimmedQuery, results: [] });
         }
       }
     }, SEARCH_DEBOUNCE_MS);
 
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, open]);
+    return () => clearTimeout(timer);
+  }, [trimmedQuery, open]);
 
   const handleAssign = useCallback(
     async (tmdbId: number, movieTitle: string) => {

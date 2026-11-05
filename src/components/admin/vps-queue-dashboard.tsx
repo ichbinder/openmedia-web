@@ -42,6 +42,7 @@ export function VpsQueueDashboard() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch; setState runs after await, the rule cannot tell
     fetchStatus();
     // Auto-refresh every 30s
     intervalRef.current = setInterval(fetchStatus, 30000);

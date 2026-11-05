@@ -254,7 +254,7 @@ export function VpsServerTypesConfig() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch; setState runs after await, the rule cannot tell
     fetchAll();
   }, [fetchAll]);
 

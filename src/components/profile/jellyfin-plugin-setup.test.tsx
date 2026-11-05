@@ -24,7 +24,6 @@ import { toast } from "sonner";
 const mockToastSuccess = vi.mocked(toast.success);
 const mockToastError = vi.mocked(toast.error);
 
-const SETUP_URL = "/api/backend/jellyfin/plugin/setup";
 const MANIFEST_URL = "https://example.com/jellyfin/manifest.json";
 
 beforeEach(() => {
