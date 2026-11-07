@@ -7,6 +7,8 @@ import { getToken } from "@/lib/auth";
 import {
   getDownloadLink,
   getNzbShowByTmdb,
+  requestEpisodes,
+  type EpisodeRequestView,
   type NzbShowInfo,
 } from "@/lib/backend";
 import type { EpisodeSummary, SeasonSummary } from "@/lib/tmdb";
@@ -34,9 +36,32 @@ const bestVersion = (files: Version[], key: "s3Key" | "s3StreamKey") =>
     .filter((f) => f[key])
     .sort((a, b) => qualityRank(label(a)) - qualityRank(label(b)))[0];
 
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+function requestNote(r: EpisodeRequestView) {
+  if (r.status === "downloading" || r.status === "done") return "Wird geladen…";
+  if (r.status === "expired") return "Keine Version gefunden";
+  if (r.status === "searching" || !r.waitReason) return "Wird gesucht…";
+  return {
+    no_german: "Noch keine deutsche Fassung",
+    budget: "Tageslimit erreicht, später erneut",
+    indexer_error: "Indexer nicht erreichbar, später erneut",
+  }[r.waitReason];
+}
+
+const requestButtonClass =
+  "flex items-center gap-1.5 rounded-md bg-cinema-gold/20 px-3 py-1.5 text-sm font-medium text-cinema-gold transition-colors hover:bg-cinema-gold/30 disabled:opacity-50";
+
 export function SeasonList({ showId, seasons }: SeasonListProps) {
   const { getStreamUrl } = useDownloads();
   const [versions, setVersions] = useState<Map<string, Version[]>>(new Map());
+  const [requests, setRequests] = useState<Map<string, EpisodeRequestView>>(
+    new Map(),
+  );
+  const [requestingKeys, setRequestingKeys] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [playing, setPlaying] = useState<{ code: string; url: string } | null>(
     null,
@@ -64,6 +89,14 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
           ]),
         );
         setVersions(loaded);
+        setRequests(
+          new Map(
+            (res.data.show.myRequests ?? []).map((r) => [
+              episodeCode(r.season, r.episode),
+              r,
+            ]),
+          ),
+        );
         const code = window.location.hash.slice(1);
         const stream = bestVersion(loaded.get(code) ?? [], "s3StreamKey");
         if (stream && !autoPlayed.current) {
@@ -113,6 +146,51 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
     }
   }
 
+  async function request(
+    key: string,
+    body: { season: number; episode?: number },
+  ) {
+    const token = getToken();
+    if (!token || requestingKeys.has(key)) return;
+    setRequestingKeys((prev) => new Set(prev).add(key));
+    try {
+      const res = await requestEpisodes({ tmdbId: showId, ...body }, token);
+      if (!res.ok || !res.data?.requests) {
+        toast.error(
+          res.data?.reason === "indexer_not_configured"
+            ? "Indexer ist nicht eingerichtet"
+            : (res.data?.error ?? "Anfordern fehlgeschlagen"),
+        );
+        return;
+      }
+      const returned = res.data.requests;
+      setRequests((prev) => {
+        const next = new Map(prev);
+        returned.forEach((r) => next.set(episodeCode(r.season, r.episode), r));
+        return next;
+      });
+      if (body.episode === undefined) {
+        toast.success(
+          returned.length
+            ? `${returned.length} Folgen angefordert`
+            : "Keine erschienenen Folgen ohne Version",
+        );
+      }
+    } catch (err) {
+      console.error("[SeasonList] request failed:", err);
+      toast.error("Anfordern fehlgeschlagen");
+    } finally {
+      setRequestingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  }
+
+  const today = localToday();
+  const hasToken = Boolean(getToken());
+  const isAired = (e: EpisodeSummary) => !!e.air_date && e.air_date <= today;
   const orderedSeasons = [...seasons].sort(
     (a, b) => a.summary.season_number - b.summary.season_number,
   );
@@ -123,11 +201,35 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
         Staffeln
       </h2>
       <div className="flex flex-col gap-8">
-        {orderedSeasons.map(({ summary, episodes, failed }) => (
+        {orderedSeasons.map(({ summary, episodes, failed }) => {
+          const seasonKey = `season-${summary.season_number}`;
+          const canRequestSeason =
+            hasToken &&
+            episodes.some((e) => {
+              const c = episodeCode(summary.season_number, e.episode_number);
+              return (
+                isAired(e) &&
+                !bestVersion(versions.get(c) ?? [], "s3Key") &&
+                !requests.has(c)
+              );
+            });
+          return (
           <div key={summary.season_number}>
-            <h3 className="mb-3 text-lg font-semibold text-foreground">
-              {summary.season_number === 0 ? "Specials" : summary.name}
-            </h3>
+            <div className="mb-3 flex items-center gap-3">
+              <h3 className="text-lg font-semibold text-foreground">
+                {summary.season_number === 0 ? "Specials" : summary.name}
+              </h3>
+              {canRequestSeason && (
+                <button
+                  type="button"
+                  onClick={() => request(seasonKey, { season: summary.season_number })}
+                  disabled={requestingKeys.has(seasonKey)}
+                  className={requestButtonClass}
+                >
+                  Staffel anfordern
+                </button>
+              )}
+            </div>
             {failed && (
               <p className="mb-3 text-sm text-muted-foreground">
                 Staffel konnte gerade nicht geladen werden.
@@ -144,6 +246,9 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                   const files = versions.get(code) ?? [];
                   const streamVersion = bestVersion(files, "s3StreamKey");
                   const downloadVersion = bestVersion(files, "s3Key");
+                  const hasVersion = files.length > 0;
+                  const req = requests.get(code);
+                  const canRequest = hasToken && isAired(episode);
                   const busy = [streamVersion, downloadVersion].some(
                     (v) => v !== undefined && busyId === v.id,
                   );
@@ -203,6 +308,28 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                               Laden
                             </button>
                           )}
+                          {!hasVersion && hasToken && req && (
+                            <span className="text-sm text-muted-foreground">
+                              {requestNote(req)}
+                            </span>
+                          )}
+                          {!hasVersion &&
+                            canRequest &&
+                            (!req || req.status === "expired") && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  request(code, {
+                                    season: summary.season_number,
+                                    episode: episode.episode_number,
+                                  })
+                                }
+                                disabled={requestingKeys.has(code)}
+                                className={requestButtonClass}
+                              >
+                                {req ? "Erneut anfordern" : "Anfordern"}
+                              </button>
+                            )}
                         </div>
                       </div>
                       {playing?.code === code && (
@@ -220,7 +347,8 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                 })}
             </ul>
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
