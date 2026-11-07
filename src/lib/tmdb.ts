@@ -84,13 +84,20 @@ export interface MovieDetail extends Movie {
 // Fetch wrapper
 // ---------------------------------------------------------------------------
 
+export const TMDB_REVALIDATE = {
+  lists: 21600,
+  details: 86400,
+  search: 3600,
+} as const;
+
 /**
  * Low-level TMDB fetch helper. Reads the API key from env, injects
  * `language=de-DE`, and throws a descriptive error on non-ok responses.
  */
 async function tmdbFetch<T>(
   endpoint: string,
-  params?: Record<string, string>,
+  params: Record<string, string> | undefined,
+  revalidate: number,
 ): Promise<T> {
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
@@ -109,7 +116,7 @@ async function tmdbFetch<T>(
     }
   }
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { next: { revalidate } });
 
   if (!res.ok) {
     throw new Error(
@@ -126,7 +133,11 @@ async function tmdbFetch<T>(
 
 /** Fetch the weekly trending movies list. */
 export async function getTrendingMovies(): Promise<Movie[]> {
-  const data = await tmdbFetch<TrendingResponse>("trending/movie/week");
+  const data = await tmdbFetch<TrendingResponse>(
+    "trending/movie/week",
+    undefined,
+    TMDB_REVALIDATE.lists,
+  );
   return data.results;
 }
 
@@ -145,12 +156,16 @@ export async function searchMovies(
   return tmdbFetch<SearchResponse>("search/movie", {
     query: trimmed,
     page: String(page),
-  });
+  }, TMDB_REVALIDATE.search);
 }
 
 /** Fetch the full list of movie genres. */
 export async function getGenres(): Promise<Genre[]> {
-  const data = await tmdbFetch<GenreListResponse>("genre/movie/list");
+  const data = await tmdbFetch<GenreListResponse>(
+    "genre/movie/list",
+    undefined,
+    TMDB_REVALIDATE.details,
+  );
   return data.genres;
 }
 
@@ -165,7 +180,7 @@ export async function discoverMoviesByGenre(
     with_genres: String(genreId),
     sort_by: "popularity.desc",
     page: String(page),
-  });
+  }, TMDB_REVALIDATE.lists);
 }
 
 /**
@@ -175,7 +190,7 @@ export async function discoverMoviesByGenre(
 export async function getMovieDetails(id: number): Promise<MovieDetail> {
   return tmdbFetch<MovieDetail>(`movie/${id}`, {
     append_to_response: "credits,videos,similar",
-  });
+  }, TMDB_REVALIDATE.details);
 }
 
 // ---------------------------------------------------------------------------
