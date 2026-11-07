@@ -45,7 +45,7 @@ const localToday = () => {
 };
 
 function requestNote(r: EpisodeRequestView) {
-  if (r.status === "downloading" || r.status === "done") return "Wird geladen…";
+  if (r.status === "downloading") return "Wird geladen…";
   if (r.status === "expired") return "Keine Version gefunden";
   if (r.status === "searching" || !r.waitReason) return "Wird gesucht…";
   return {
@@ -236,7 +236,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
               return (
                 isAired(e) &&
                 !isPlayable(versions.get(c)) &&
-                !requests.has(c)
+                (!requests.has(c) || requests.get(c)?.status === "done")
               );
             });
           return (
@@ -350,14 +350,14 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                                 Versionen
                               </button>
                             )}
-                            {!hasVersion && hasToken && req && (
+                            {!hasVersion && hasToken && req && req.status !== "done" && (
                               <span className="text-sm text-muted-foreground">
                                 {requestNote(req)}
                               </span>
                             )}
                             {!hasVersion &&
                               canRequest &&
-                              (!req || req.status === "expired") && (
+                              (!req || req.status === "expired" || req.status === "done") && (
                                 <button
                                   type="button"
                                   onClick={() =>

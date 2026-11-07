@@ -318,6 +318,17 @@ describe("SeasonList", () => {
       expect(screen.getByText("Staffel anfordern")).toBeTruthy();
     });
 
+    it("offers a re-request for a done episode whose file was evicted", async () => {
+      mockGetShow.mockResolvedValue(
+        withRequests([{ season: 1, episode: 1, status: "done", waitReason: null }], [unplayable]),
+      );
+      render(<SeasonList showId={7} seasons={one("2022-02-18")} />);
+      const row = document.getElementById("S01E01")!;
+      await within(row).findByText("Erneut anfordern");
+      expect(screen.getByText("Staffel anfordern")).toBeTruthy();
+      expect(within(row).queryByText("Wird geladen…")).toBeNull();
+    });
+
     it("toasts when TMDB does not know the requested episode", async () => {
       vi.mocked(toast.error).mockClear();
       mockRequest.mockResolvedValue({ ok: true, status: 200, data: { requests: [] } });
