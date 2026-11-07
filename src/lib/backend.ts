@@ -36,6 +36,20 @@ export async function backendFetch<T = unknown>(
 
 // ── Download Jobs ────────────────────────────────────────────
 
+export interface EpisodeRef {
+  id: string;
+  season: number;
+  episode: number;
+  titleDe: string | null;
+  show: {
+    tmdbId: number;
+    titleDe: string;
+    titleEn: string;
+    year: number | null;
+    posterPath: string | null;
+  };
+}
+
 export interface DownloadJob {
   id: string;
   // M021: 'needs_review' (waiting for manual TMDB assignment) and 'expired'
@@ -76,6 +90,7 @@ export interface DownloadJob {
       posterPath: string | null;
       year: number | null;
     } | null;
+    episode: EpisodeRef | null;
   };
 }
 
@@ -161,6 +176,27 @@ export async function getNzbMovieByTmdb(tmdbId: number, token: string) {
   return backendFetch<{ movie: NzbMovieInfo }>(`/nzb/movies/by-tmdb/${tmdbId}`, { token });
 }
 
+export interface NzbShowInfo {
+  id: string;
+  tmdbId: number;
+  titleDe: string;
+  titleEn: string;
+  year: number | null;
+  posterPath: string | null;
+  episodes: {
+    id: string;
+    season: number;
+    episode: number;
+    titleDe: string | null;
+    airDate: string | null;
+    nzbFiles: (NzbFileInfo & { fileSize: string })[];
+  }[];
+}
+
+export async function getNzbShowByTmdb(tmdbId: number, token: string) {
+  return backendFetch<{ show: NzbShowInfo }>(`/nzb/shows/by-tmdb/${tmdbId}`, { token });
+}
+
 // ── Download Links ───────────────────────────────────────────
 
 export interface DownloadLink {
@@ -193,7 +229,8 @@ export interface LibraryItem {
       titleEn: string;
       year: number | null;
       posterPath: string | null;
-    };
+    } | null;
+    episode: EpisodeRef | null;
   };
 }
 

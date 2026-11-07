@@ -4,7 +4,18 @@ import type { MovieDetail } from "@/lib/tmdb";
 import { getBackdropUrl, getPosterUrl } from "@/lib/tmdb";
 
 interface MovieDetailHeroProps {
-  movie: MovieDetail;
+  movie: Pick<
+    MovieDetail,
+    | "title"
+    | "backdrop_path"
+    | "poster_path"
+    | "release_date"
+    | "runtime"
+    | "genres"
+    | "tagline"
+    | "vote_average"
+    | "overview"
+  >;
 }
 
 function formatRuntime(minutes: number | null): string | null {

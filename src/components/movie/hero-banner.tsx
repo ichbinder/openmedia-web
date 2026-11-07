@@ -6,9 +6,10 @@ import { getBackdropUrl } from "@/lib/tmdb";
 
 interface HeroBannerProps {
   movie: Movie;
+  href?: string;
 }
 
-export function HeroBanner({ movie }: HeroBannerProps) {
+export function HeroBanner({ movie, href }: HeroBannerProps) {
   const backdropUrl = getBackdropUrl(movie.backdrop_path, "w1280");
 
   if (!backdropUrl) {
@@ -56,7 +57,7 @@ export function HeroBanner({ movie }: HeroBannerProps) {
         )}
 
         <Link
-          href={`/movie/${movie.id}`}
+          href={href ?? `/movie/${movie.id}`}
           className="mt-2 inline-flex w-fit items-center rounded-lg bg-cinema-gold px-5 py-2.5 text-sm font-semibold text-cinema-gold-foreground transition-colors hover:bg-cinema-gold/90"
         >
           Details ansehen

@@ -160,6 +160,12 @@ function createHandler(): http.RequestListener {
         return;
       }
 
+      if (method === "GET" && path === "/search/tv") {
+        sendJson(res, 200, { page: 1, results: [], total_results: 0, total_pages: 0 });
+        logRequest(method, path, 200);
+        return;
+      }
+
       // /movie/:id  (also matches /movie/123?append_to_response=...)
       const movieMatch = path.match(/^\/movie\/(\d+)$/);
       if (method === "GET" && movieMatch) {

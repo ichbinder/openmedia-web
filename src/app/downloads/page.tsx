@@ -8,6 +8,7 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 import { AssignMovieDialog } from "@/components/downloads/assign-movie-dialog";
 import { getPosterUrl } from "@/lib/tmdb";
 import type { DownloadJob } from "@/lib/backend";
+import { isEpisodeFilename } from "@/lib/episode-filename";
 import {
   AlertTriangle,
   AlertCircle,
@@ -63,7 +64,9 @@ interface JobRowProps {
 
 function JobRow({ job, onAssignClick }: JobRowProps) {
   const { cancelJob, getLink } = useDownloads();
-  const movie = job.nzbFile?.movie;
+  const episode = job.nzbFile?.episode;
+  const movie = episode ? episode.show : job.nzbFile?.movie;
+  const detailHref = episode ? `/serie/${episode.show.tmdbId}` : `/movie/${movie?.tmdbId}`;
   const posterUrl = movie?.posterPath ? getPosterUrl(movie.posterPath, "w92") : null;
 
   const isNeedsReview = job.status === "needs_review";
@@ -76,8 +79,12 @@ function JobRow({ job, onAssignClick }: JobRowProps) {
 
   // For needs_review and expired rows we don't have a movie — show the
   // NZB filename as the headline instead of "Unbekannt".
+  const episodeCode = episode
+    ? ` · S${String(episode.season).padStart(2, "0")}E${String(episode.episode).padStart(2, "0")}`
+    : "";
+  const episodeTitle = episode?.titleDe ? ` · ${episode.titleDe}` : "";
   const headline = movie
-    ? movie.titleDe || movie.titleEn
+    ? (movie.titleDe || movie.titleEn) + episodeCode + episodeTitle
     : nzbDisplayName(job);
 
   return (
@@ -93,7 +100,7 @@ function JobRow({ job, onAssignClick }: JobRowProps) {
       {/* Poster (or icon placeholder for needs_review/expired) */}
       {movie?.tmdbId ? (
         <Link
-          href={`/movie/${movie.tmdbId}`}
+          href={detailHref}
           className="relative h-16 w-11 shrink-0 overflow-hidden rounded bg-muted"
         >
           {posterUrl ? (
@@ -183,7 +190,14 @@ function JobRow({ job, onAssignClick }: JobRowProps) {
 
       {/* Actions */}
       <div className="flex gap-1 shrink-0">
-        {isNeedsReview && onAssignClick && (
+        {isNeedsReview && isEpisodeFilename(job.nzbFile?.originalFilename) && (
+          <span className="px-3 py-1.5 text-xs text-muted-foreground">
+            {job.tmdbRetryAfter
+              ? "Folge – wird automatisch zugeordnet"
+              : "Folge – bei TMDB nicht gefunden"}
+          </span>
+        )}
+        {isNeedsReview && onAssignClick && !isEpisodeFilename(job.nzbFile?.originalFilename) && (
           <button
             onClick={() => onAssignClick(job.id)}
             className="rounded-md bg-amber-500/15 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/25 transition-colors"

@@ -80,17 +80,85 @@ export interface MovieDetail extends Movie {
   similar: { results: Movie[] };
 }
 
+export interface Show {
+  id: number;
+  name: string;
+  original_name: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  vote_average: number;
+  first_air_date: string;
+  genre_ids: number[];
+}
+
+export interface SeasonSummary {
+  season_number: number;
+  name: string;
+  episode_count: number;
+  air_date: string | null;
+  poster_path: string | null;
+}
+
+export interface ShowDetail extends Show {
+  number_of_seasons: number;
+  seasons: SeasonSummary[];
+  genres: Genre[];
+  tagline: string | null;
+  credits: { cast: CastMember[] };
+  videos: { results: Video[] };
+  similar: { results: Show[] };
+}
+
+export interface EpisodeSummary {
+  episode_number: number;
+  name: string;
+  overview: string;
+  air_date: string | null;
+  still_path: string | null;
+  runtime: number | null;
+}
+
+export interface SeasonDetail {
+  season_number: number;
+  name: string;
+  episodes: EpisodeSummary[];
+}
+
+export interface ShowSearchResponse {
+  page: number;
+  results: Show[];
+  total_pages: number;
+  total_results: number;
+}
+
 // ---------------------------------------------------------------------------
 // Fetch wrapper
 // ---------------------------------------------------------------------------
+
+export const TMDB_REVALIDATE = {
+  lists: 21600,
+  details: 86400,
+  search: 3600,
+} as const;
 
 /**
  * Low-level TMDB fetch helper. Reads the API key from env, injects
  * `language=de-DE`, and throws a descriptive error on non-ok responses.
  */
+export class TmdbError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
 async function tmdbFetch<T>(
   endpoint: string,
-  params?: Record<string, string>,
+  params: Record<string, string> | undefined,
+  revalidate: number,
 ): Promise<T> {
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) {
@@ -109,11 +177,12 @@ async function tmdbFetch<T>(
     }
   }
 
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { next: { revalidate } });
 
   if (!res.ok) {
-    throw new Error(
+    throw new TmdbError(
       `[tmdb] ${endpoint} responded with ${res.status} ${res.statusText}`,
+      res.status,
     );
   }
 
@@ -126,7 +195,11 @@ async function tmdbFetch<T>(
 
 /** Fetch the weekly trending movies list. */
 export async function getTrendingMovies(): Promise<Movie[]> {
-  const data = await tmdbFetch<TrendingResponse>("trending/movie/week");
+  const data = await tmdbFetch<TrendingResponse>(
+    "trending/movie/week",
+    undefined,
+    TMDB_REVALIDATE.lists,
+  );
   return data.results;
 }
 
@@ -145,12 +218,16 @@ export async function searchMovies(
   return tmdbFetch<SearchResponse>("search/movie", {
     query: trimmed,
     page: String(page),
-  });
+  }, TMDB_REVALIDATE.search);
 }
 
 /** Fetch the full list of movie genres. */
 export async function getGenres(): Promise<Genre[]> {
-  const data = await tmdbFetch<GenreListResponse>("genre/movie/list");
+  const data = await tmdbFetch<GenreListResponse>(
+    "genre/movie/list",
+    undefined,
+    TMDB_REVALIDATE.details,
+  );
   return data.genres;
 }
 
@@ -165,7 +242,7 @@ export async function discoverMoviesByGenre(
     with_genres: String(genreId),
     sort_by: "popularity.desc",
     page: String(page),
-  });
+  }, TMDB_REVALIDATE.lists);
 }
 
 /**
@@ -175,7 +252,54 @@ export async function discoverMoviesByGenre(
 export async function getMovieDetails(id: number): Promise<MovieDetail> {
   return tmdbFetch<MovieDetail>(`movie/${id}`, {
     append_to_response: "credits,videos,similar",
-  });
+  }, TMDB_REVALIDATE.details);
+}
+
+/** Fetch the weekly trending TV shows list. */
+export async function getTrendingShows(): Promise<Show[]> {
+  const data = await tmdbFetch<{ results: Show[] }>(
+    "trending/tv/week",
+    undefined,
+    TMDB_REVALIDATE.lists,
+  );
+  return data.results;
+}
+
+/** Search TV shows by title; blank queries return empty results without a request. */
+export async function searchShows(
+  query: string,
+  page: number = 1,
+): Promise<ShowSearchResponse> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { page: 1, results: [], total_pages: 0, total_results: 0 };
+  }
+  return tmdbFetch<ShowSearchResponse>(
+    "search/tv",
+    { query: trimmed, page: String(page) },
+    TMDB_REVALIDATE.search,
+  );
+}
+
+/** Fetch full show details including credits, videos, and similar shows. */
+export async function getShowDetails(id: number): Promise<ShowDetail> {
+  return tmdbFetch<ShowDetail>(
+    `tv/${id}`,
+    { append_to_response: "credits,videos,similar" },
+    TMDB_REVALIDATE.details,
+  );
+}
+
+/** Fetch one season with its episodes. */
+export async function getSeasonDetails(
+  id: number,
+  season: number,
+): Promise<SeasonDetail> {
+  return tmdbFetch<SeasonDetail>(
+    `tv/${id}/season/${season}`,
+    undefined,
+    TMDB_REVALIDATE.details,
+  );
 }
 
 // ---------------------------------------------------------------------------
