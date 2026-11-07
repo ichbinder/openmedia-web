@@ -40,7 +40,12 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
     let cancelled = false;
     getNzbShowByTmdb(showId, token)
       .then((res) => {
-        if (cancelled || !res.ok) return;
+        if (cancelled || res.status === 404) return;
+        if (!res.ok) {
+          console.error("[SeasonList] versions request failed:", res.status);
+          toast.error("Versionen konnten nicht geladen werden");
+          return;
+        }
         setVersions(
           new Map(
             res.data.show.episodes.map((e) => [
@@ -50,7 +55,11 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
           ),
         );
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("[SeasonList] versions request failed:", err);
+        toast.error("Versionen konnten nicht geladen werden");
+      });
     return () => {
       cancelled = true;
     };
@@ -73,9 +82,16 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
     const token = getToken();
     if (!token) return;
     setBusyId(fileId);
-    const res = await getDownloadLink(fileId, token);
-    if (res.ok && res.data?.url) window.open(res.data.url, "_blank");
-    setBusyId(null);
+    try {
+      const res = await getDownloadLink(fileId, token);
+      if (res.ok && res.data?.url) window.open(res.data.url, "_blank");
+      else toast.error("Download-Link konnte nicht abgerufen werden");
+    } catch (err) {
+      console.error("[SeasonList] download failed:", err);
+      toast.error("Download fehlgeschlagen");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   const orderedSeasons = [...seasons].sort(

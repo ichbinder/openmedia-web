@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getSeasonDetails, getShowDetails } from "@/lib/tmdb";
+import { getShowDetails } from "@/lib/tmdb";
+import { loadSeasons } from "@/lib/show-seasons";
 import { MovieDetailHero } from "@/components/movie/movie-detail-hero";
 import { CastList } from "@/components/movie/cast-list";
 import { TrailerSection } from "@/components/movie/trailer-section";
@@ -42,16 +43,8 @@ export default async function ShowDetailPage({ params }: ShowPageProps) {
   }
 
   let show;
-  let seasons;
   try {
     show = await getShowDetails(showId);
-    seasons = await Promise.all(
-      show.seasons.map(async (summary) => ({
-        summary,
-        episodes: (await getSeasonDetails(showId, summary.season_number))
-          .episodes,
-      })),
-    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unbekannter Fehler";
@@ -65,6 +58,8 @@ export default async function ShowDetailPage({ params }: ShowPageProps) {
       </div>
     );
   }
+
+  const seasons = await loadSeasons(showId, show.seasons);
 
   return (
     <div>
