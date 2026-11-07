@@ -51,12 +51,30 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 }
 
 async function Results({ query }: { query: string }) {
-  const [data, shows] = await Promise.all([
+  const [moviesResult, showsResult] = await Promise.allSettled([
     searchMovies(query),
-    searchShows(query).then((r) => r.results).catch(() => []),
+    searchShows(query),
   ]);
 
-  if (data.results.length === 0 && shows.length === 0) {
+  if (moviesResult.status === "rejected") {
+    console.error("[search] movie search failed:", moviesResult.reason);
+    if (showsResult.status === "rejected") throw moviesResult.reason;
+  }
+  if (showsResult.status === "rejected") {
+    console.error("[search] show search failed:", showsResult.reason);
+  }
+
+  const movies =
+    moviesResult.status === "fulfilled" ? moviesResult.value.results : [];
+  const shows =
+    showsResult.status === "fulfilled" ? showsResult.value.results : [];
+
+  if (
+    moviesResult.status === "fulfilled" &&
+    showsResult.status === "fulfilled" &&
+    movies.length === 0 &&
+    shows.length === 0
+  ) {
     return (
       <p className="text-muted-foreground">
         Nichts gefunden für &ldquo;{query}&rdquo;.
@@ -66,8 +84,18 @@ async function Results({ query }: { query: string }) {
 
   return (
     <>
-      {data.results.length > 0 && <MovieSection query={query} movies={data.results} />}
+      {moviesResult.status === "rejected" && (
+        <p className="text-sm text-muted-foreground">
+          Filmsuche ist gerade nicht erreichbar.
+        </p>
+      )}
+      {movies.length > 0 && <MovieSection query={query} movies={movies} />}
       {shows.length > 0 && <ShowSection shows={shows} />}
+      {showsResult.status === "rejected" && (
+        <p className="mt-6 text-sm text-muted-foreground">
+          Seriensuche ist gerade nicht erreichbar.
+        </p>
+      )}
     </>
   );
 }

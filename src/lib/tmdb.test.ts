@@ -9,6 +9,7 @@ import {
   searchShows,
   getShowDetails,
   getSeasonDetails,
+  TmdbError,
 } from "./tmdb";
 
 const mockFetch = vi.fn();
@@ -43,6 +44,22 @@ describe("TMDB movie cache", () => {
       expect.stringContaining(endpoint),
       { next: { revalidate } },
     ]);
+  });
+});
+
+describe("TMDB errors", () => {
+  it("rejects with a TmdbError carrying the HTTP status", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404, statusText: "Not Found" });
+    const error = await getShowDetails(5).catch((e) => e);
+    expect(error).toBeInstanceOf(TmdbError);
+    expect(error.status).toBe(404);
+  });
+
+  it("discoverMoviesByGenre sends genre and page", async () => {
+    await discoverMoviesByGenre(28);
+    const url = new URL(lastCall()[0]);
+    expect(url.searchParams.get("with_genres")).toBe("28");
+    expect(url.searchParams.get("page")).toBe("1");
   });
 });
 

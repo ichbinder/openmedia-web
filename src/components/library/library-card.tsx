@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { toast } from "sonner";
 import { getToken } from "@/lib/auth";
 import { getPosterUrl } from "@/lib/tmdb";
 import {
@@ -47,23 +48,35 @@ export function LibraryCard({
     const token = getToken();
     if (!token) return;
     setIsDownloading(true);
-    const res = await getDownloadLink(item.nzbFile.id, token);
-    if (res.ok && res.data?.url) {
-      window.open(res.data.url, "_blank");
+    try {
+      const res = await getDownloadLink(item.nzbFile.id, token);
+      if (res.ok && res.data?.url) {
+        window.open(res.data.url, "_blank");
+      }
+    } catch (err) {
+      console.error("[LibraryCard] download failed:", err);
+      toast.error("Download fehlgeschlagen");
+    } finally {
+      setIsDownloading(false);
     }
-    setIsDownloading(false);
   }
 
   async function handleRemove() {
     const token = getToken();
     if (!token) return;
     setIsRemoving(true);
-    const res = await removeFromLibrary(item.nzbFile.id, token);
-    if (res.ok) {
-      onRemove(item.nzbFile.id);
+    try {
+      const res = await removeFromLibrary(item.nzbFile.id, token);
+      if (res.ok) {
+        onRemove(item.nzbFile.id);
+      }
+    } catch (err) {
+      console.error("[LibraryCard] remove failed:", err);
+      toast.error("Entfernen fehlgeschlagen");
+    } finally {
+      setIsRemoving(false);
+      setShowConfirm(false);
     }
-    setIsRemoving(false);
-    setShowConfirm(false);
   }
 
   return (

@@ -146,6 +146,15 @@ export const TMDB_REVALIDATE = {
  * Low-level TMDB fetch helper. Reads the API key from env, injects
  * `language=de-DE`, and throws a descriptive error on non-ok responses.
  */
+export class TmdbError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
 async function tmdbFetch<T>(
   endpoint: string,
   params: Record<string, string> | undefined,
@@ -171,8 +180,9 @@ async function tmdbFetch<T>(
   const res = await fetch(url.toString(), { next: { revalidate } });
 
   if (!res.ok) {
-    throw new Error(
+    throw new TmdbError(
       `[tmdb] ${endpoint} responded with ${res.status} ${res.statusText}`,
+      res.status,
     );
   }
 

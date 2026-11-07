@@ -5,6 +5,8 @@ describe("isEpisodeFilename", () => {
   it("erkennt SxxEyy-Muster", () => {
     expect(isEpisodeFilename("Some.Show.S02E05.1080p.WEB.nzb")).toBe(true);
     expect(isEpisodeFilename("some show s1e10 720p.nzb")).toBe(true);
+    expect(isEpisodeFilename("Show.S02.E05.nzb")).toBe(true);
+    expect(isEpisodeFilename("Show S02 E05")).toBe(true);
   });
 
   it("erkennt Filme nicht als Folgen", () => {

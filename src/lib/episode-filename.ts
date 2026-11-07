@@ -1,4 +1,4 @@
-const EPISODE_PATTERN = /(^|[^a-z0-9])s\d{1,2}e\d{1,3}(?![0-9])/i;
+const EPISODE_PATTERN = /(?:^|[ ._-])S(\d{1,2})[ ._-]?E(\d{1,3})/i;
 
 export function isEpisodeFilename(filename: string | undefined | null): boolean {
   return !!filename && EPISODE_PATTERN.test(filename);

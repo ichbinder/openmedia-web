@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getShowDetails } from "@/lib/tmdb";
+import { getShowDetails, TmdbError } from "@/lib/tmdb";
 import { loadSeasons } from "@/lib/show-seasons";
 import { MovieDetailHero } from "@/components/movie/movie-detail-hero";
 import { CastList } from "@/components/movie/cast-list";
@@ -46,6 +46,7 @@ export default async function ShowDetailPage({ params }: ShowPageProps) {
   try {
     show = await getShowDetails(showId);
   } catch (error) {
+    if (error instanceof TmdbError && error.status === 404) notFound();
     const message =
       error instanceof Error ? error.message : "Unbekannter Fehler";
     return (

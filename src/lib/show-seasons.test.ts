@@ -21,6 +21,7 @@ describe("loadSeasons", () => {
     });
     const result = await loadSeasons(1, [summary(1), summary(2)]);
     expect(result.map((s) => s.episodes.length)).toEqual([1, 0]);
+    expect(result.map((s) => s.failed)).toEqual([false, true]);
     expect(result.map((s) => s.summary.season_number)).toEqual([1, 2]);
   });
 });

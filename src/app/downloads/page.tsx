@@ -82,8 +82,9 @@ function JobRow({ job, onAssignClick }: JobRowProps) {
   const episodeCode = episode
     ? ` · S${String(episode.season).padStart(2, "0")}E${String(episode.episode).padStart(2, "0")}`
     : "";
+  const episodeTitle = episode?.titleDe ? ` · ${episode.titleDe}` : "";
   const headline = movie
-    ? (movie.titleDe || movie.titleEn) + episodeCode
+    ? (movie.titleDe || movie.titleEn) + episodeCode + episodeTitle
     : nzbDisplayName(job);
 
   return (
@@ -191,7 +192,9 @@ function JobRow({ job, onAssignClick }: JobRowProps) {
       <div className="flex gap-1 shrink-0">
         {isNeedsReview && isEpisodeFilename(job.nzbFile?.originalFilename) && (
           <span className="px-3 py-1.5 text-xs text-muted-foreground">
-            Folge – wird automatisch zugeordnet
+            {job.tmdbRetryAfter
+              ? "Folge – wird automatisch zugeordnet"
+              : "Folge – bei TMDB nicht gefunden"}
           </span>
         )}
         {isNeedsReview && onAssignClick && !isEpisodeFilename(job.nzbFile?.originalFilename) && (

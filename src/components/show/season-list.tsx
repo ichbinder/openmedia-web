@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Loader2, Play } from "lucide-react";
 import { toast } from "sonner";
 import { getToken } from "@/lib/auth";
@@ -18,13 +18,21 @@ type Version = NzbShowInfo["episodes"][number]["nzbFiles"][number];
 
 interface SeasonListProps {
   showId: number;
-  seasons: { summary: SeasonSummary; episodes: EpisodeSummary[] }[];
+  seasons: {
+    summary: SeasonSummary;
+    episodes: EpisodeSummary[];
+    failed: boolean;
+  }[];
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const label = (v: Version) => v.qualityTier || v.resolution;
 const episodeCode = (season: number, episode: number) =>
   `S${pad(season)}E${pad(episode)}`;
+const bestVersion = (files: Version[], key: "s3Key" | "s3StreamKey") =>
+  files
+    .filter((f) => f[key])
+    .sort((a, b) => qualityRank(label(a)) - qualityRank(label(b)))[0];
 
 export function SeasonList({ showId, seasons }: SeasonListProps) {
   const { getStreamUrl } = useDownloads();
@@ -33,6 +41,9 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
   const [playing, setPlaying] = useState<{ code: string; url: string } | null>(
     null,
   );
+
+  const playRequest = useRef(0);
+  const autoPlayed = useRef(false);
 
   useEffect(() => {
     const token = getToken();
@@ -46,14 +57,19 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
           toast.error("Versionen konnten nicht geladen werden");
           return;
         }
-        setVersions(
-          new Map(
-            res.data.show.episodes.map((e) => [
-              episodeCode(e.season, e.episode),
-              e.nzbFiles,
-            ]),
-          ),
+        const loaded = new Map(
+          res.data.show.episodes.map((e) => [
+            episodeCode(e.season, e.episode),
+            e.nzbFiles,
+          ]),
         );
+        setVersions(loaded);
+        const code = window.location.hash.slice(1);
+        const stream = bestVersion(loaded.get(code) ?? [], "s3StreamKey");
+        if (stream && !autoPlayed.current) {
+          autoPlayed.current = true;
+          void play(code, stream.id);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -63,18 +79,21 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showId]);
 
   async function play(code: string, fileId: string) {
+    const request = ++playRequest.current;
     setBusyId(fileId);
     try {
       const url = await getStreamUrl(fileId);
+      if (request !== playRequest.current) return;
       if (url) setPlaying({ code, url });
       else toast.error("Stream konnte nicht gestartet werden");
     } catch {
-      toast.error("Stream fehlgeschlagen");
+      if (request === playRequest.current) toast.error("Stream fehlgeschlagen");
     } finally {
-      setBusyId(null);
+      setBusyId((prev) => (prev === fileId ? null : prev));
     }
   }
 
@@ -90,7 +109,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
       console.error("[SeasonList] download failed:", err);
       toast.error("Download fehlgeschlagen");
     } finally {
-      setBusyId(null);
+      setBusyId((prev) => (prev === fileId ? null : prev));
     }
   }
 
@@ -104,11 +123,16 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
         Staffeln
       </h2>
       <div className="flex flex-col gap-8">
-        {orderedSeasons.map(({ summary, episodes }) => (
+        {orderedSeasons.map(({ summary, episodes, failed }) => (
           <div key={summary.season_number}>
             <h3 className="mb-3 text-lg font-semibold text-foreground">
               {summary.season_number === 0 ? "Specials" : summary.name}
             </h3>
+            {failed && (
+              <p className="mb-3 text-sm text-muted-foreground">
+                Staffel konnte gerade nicht geladen werden.
+              </p>
+            )}
             <ul className="flex flex-col gap-2">
               {[...episodes]
                 .sort((a, b) => a.episode_number - b.episode_number)
@@ -118,12 +142,11 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                     episode.episode_number,
                   );
                   const files = versions.get(code) ?? [];
-                  const best = files
-                    .filter((f) => f.s3Key)
-                    .sort(
-                      (a, b) => qualityRank(label(a)) - qualityRank(label(b)),
-                    )[0];
-                  const busy = best !== undefined && busyId === best.id;
+                  const streamVersion = bestVersion(files, "s3StreamKey");
+                  const downloadVersion = bestVersion(files, "s3Key");
+                  const busy = [streamVersion, downloadVersion].some(
+                    (v) => v !== undefined && busyId === v.id,
+                  );
 
                   return (
                     <li
@@ -153,11 +176,11 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                             </span>
                           ) : null,
                         )}
-                        {best && (
-                          <div className="ml-auto flex gap-2">
+                        <div className="ml-auto flex gap-2">
+                          {streamVersion && (
                             <button
                               type="button"
-                              onClick={() => play(code, best.id)}
+                              onClick={() => play(code, streamVersion.id)}
                               disabled={busy}
                               className="flex items-center gap-1.5 rounded-md bg-cinema-gold px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90 disabled:opacity-50"
                             >
@@ -168,17 +191,19 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                               )}
                               Abspielen
                             </button>
+                          )}
+                          {downloadVersion && (
                             <button
                               type="button"
-                              onClick={() => download(best.id)}
+                              onClick={() => download(downloadVersion.id)}
                               disabled={busy}
                               className="flex items-center gap-1.5 rounded-md bg-cinema-gold/20 px-3 py-1.5 text-sm font-medium text-cinema-gold transition-colors hover:bg-cinema-gold/30 disabled:opacity-50"
                             >
                               <Download className="size-3.5" />
                               Laden
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                       {playing?.code === code && (
                         <div className="mt-3">
