@@ -15,6 +15,7 @@ import type { EpisodeSummary, SeasonSummary } from "@/lib/tmdb";
 import { qualityRank } from "@/lib/utils";
 import { useDownloads } from "@/contexts/download-context";
 import { VideoPlayer } from "@/components/movie/video-player";
+import { EpisodeCandidates } from "./episode-candidates";
 
 type Version = NzbShowInfo["episodes"][number]["nzbFiles"][number];
 
@@ -64,6 +65,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
   const [hasToken, setHasToken] = useState(false);
   const [today, setToday] = useState<string | null>(null);
   const [requestingKeys, setRequestingKeys] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [playing, setPlaying] = useState<{ code: string; url: string } | null>(
     null,
@@ -195,6 +197,20 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
     }
   }
 
+  function toggleExpanded(code: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(code)) next.add(code);
+      return next;
+    });
+  }
+
+  function onRequested(view: EpisodeRequestView) {
+    setRequests((prev) =>
+      new Map(prev).set(episodeCode(view.season, view.episode), view),
+    );
+  }
+
   const isAired = (e: EpisodeSummary) =>
     !!e.air_date && today !== null && e.air_date <= today;
   const orderedSeasons = [...seasons].sort(
@@ -320,6 +336,16 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                                 Laden
                               </button>
                             )}
+                            {canRequest && (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpanded(code)}
+                                aria-expanded={expanded.has(code)}
+                                className="text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                Versionen
+                              </button>
+                            )}
                             {!hasVersion && hasToken && req && (
                               <span className="text-sm text-muted-foreground">
                                 {requestNote(req)}
@@ -344,6 +370,16 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                               )}
                           </div>
                         </div>
+                        {canRequest && expanded.has(code) && (
+                          <div className="mt-3">
+                            <EpisodeCandidates
+                              tmdbId={showId}
+                              season={summary.season_number}
+                              episode={episode.episode_number}
+                              onRequested={onRequested}
+                            />
+                          </div>
+                        )}
                         {playing?.code === code && (
                           <div className="mt-3">
                             <VideoPlayer

@@ -7,6 +7,7 @@ vi.mock("@/lib/backend", () => ({
   getNzbShowByTmdb: vi.fn(),
   getDownloadLink: vi.fn(),
   requestEpisodes: vi.fn(),
+  getReleaseCandidates: vi.fn(),
 }));
 const mockGetStreamUrl = vi.hoisted(() => vi.fn());
 vi.mock("@/contexts/download-context", () => ({
@@ -19,10 +20,11 @@ vi.mock("@/components/movie/video-player", () => ({
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { toast } from "sonner";
-import { getNzbShowByTmdb, getDownloadLink, requestEpisodes } from "@/lib/backend";
+import { getNzbShowByTmdb, getDownloadLink, requestEpisodes, getReleaseCandidates } from "@/lib/backend";
 const mockGetShow = vi.mocked(getNzbShowByTmdb);
 const mockDownload = vi.mocked(getDownloadLink);
 const mockRequest = vi.mocked(requestEpisodes);
+const mockCandidates = vi.mocked(getReleaseCandidates);
 
 function showWith(nzbFiles: unknown[]) {
   return {
@@ -354,6 +356,31 @@ describe("SeasonList", () => {
       render(<SeasonList showId={7} seasons={one("2022-02-18")} />);
       fireEvent.click(await screen.findByText("Anfordern"));
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Indexer kaputt"));
+    });
+
+    it("expands the version list and updates the episode status after loading one", async () => {
+      mockCandidates.mockResolvedValue({
+        ok: true,
+        status: 200,
+        data: {
+          candidates: [
+            { guid: "g1", title: "t", qualityTier: "1080p", sizeBytes: 3010000000, gbPerHour: 3, inTargetBand: true, germanSubtitles: false, audioDescription: false, releaseType: "WEB-DL", languageSource: "tag" },
+          ],
+        },
+      });
+      mockRequest.mockResolvedValue({
+        ok: true,
+        status: 200,
+        data: { requests: [{ season: 1, episode: 1, status: "downloading", waitReason: null }] },
+      });
+      render(<SeasonList showId={7} seasons={one("2022-02-18")} />);
+      const toggle = await screen.findByText("Versionen");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      fireEvent.click(await screen.findByText("Diese laden"));
+      await waitFor(() => expect(screen.getByText("Wird geladen…")).toBeTruthy());
+      expect(mockCandidates).toHaveBeenCalledTimes(1);
     });
   });
 });
