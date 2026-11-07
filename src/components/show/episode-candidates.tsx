@@ -84,11 +84,17 @@ export function EpisodeCandidates({
         (r) => r.season === season && r.episode === episode,
       );
       if (!res.ok || !view) {
-        toast.error(res.data?.error ?? "Anfordern fehlgeschlagen");
+        toast.error(
+          res.ok && !res.data?.requests?.length
+            ? "Folge bei TMDB nicht gefunden"
+            : (res.data?.error ?? "Anfordern fehlgeschlagen"),
+        );
         return;
       }
       onRequested(view);
-      toast.success("Version angefordert");
+      toast.success(
+        view.status === "done" ? "Version ist schon verfügbar" : "Version angefordert",
+      );
     } catch (err) {
       console.error("[EpisodeCandidates] request failed:", err);
       toast.error("Anfordern fehlgeschlagen");

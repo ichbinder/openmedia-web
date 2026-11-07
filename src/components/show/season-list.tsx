@@ -32,6 +32,8 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const label = (v: Version) => v.qualityTier || v.resolution;
 const episodeCode = (season: number, episode: number) =>
   `S${pad(season)}E${pad(episode)}`;
+const isPlayable = (files: Version[] | undefined) =>
+  !!files?.some((f) => f.s3Key);
 const bestVersion = (files: Version[], key: "s3Key" | "s3StreamKey") =>
   files
     .filter((f) => f[key])
@@ -100,7 +102,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
         setVersions(loaded);
         setRequests(
           new Map(
-            (res.data.show.myRequests ?? []).map((r) => [
+            (res.data.myRequests ?? []).map((r) => [
               episodeCode(r.season, r.episode),
               r,
             ]),
@@ -178,7 +180,9 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
         returned.forEach((r) => next.set(episodeCode(r.season, r.episode), r));
         return next;
       });
-      if (body.episode === undefined) {
+      if (body.episode !== undefined && !returned.length) {
+        toast.error("Folge bei TMDB nicht gefunden");
+      } else if (body.episode === undefined) {
         toast.success(
           returned.length
             ? `${returned.length} Folgen angefordert`
@@ -231,7 +235,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
               const c = episodeCode(summary.season_number, e.episode_number);
               return (
                 isAired(e) &&
-                !(versions.get(c)?.length ?? 0) &&
+                !isPlayable(versions.get(c)) &&
                 !requests.has(c)
               );
             });
@@ -270,7 +274,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                     const files = versions.get(code) ?? [];
                     const streamVersion = bestVersion(files, "s3StreamKey");
                     const downloadVersion = bestVersion(files, "s3Key");
-                    const hasVersion = files.length > 0;
+                    const hasVersion = isPlayable(files);
                     const req = requests.get(code);
                     const canRequest = hasToken && isAired(episode);
                     const busy = [streamVersion, downloadVersion].some(

@@ -198,11 +198,10 @@ export interface NzbShowInfo {
     airDate: string | null;
     nzbFiles: (NzbFileInfo & { fileSize: string })[];
   }[];
-  myRequests?: EpisodeRequestView[];
 }
 
 export async function getNzbShowByTmdb(tmdbId: number, token: string) {
-  return backendFetch<{ show: NzbShowInfo }>(`/nzb/shows/by-tmdb/${tmdbId}`, { token });
+  return backendFetch<{ show: NzbShowInfo; myRequests: EpisodeRequestView[] }>(`/nzb/shows/by-tmdb/${tmdbId}`, { token });
 }
 
 export async function requestEpisodes(
@@ -221,11 +220,11 @@ export interface ReleaseCandidate {
   title: string;
   qualityTier: string;
   sizeBytes: number;
-  gbPerHour: number | null;
+  gbPerHour: number;
   inTargetBand: boolean;
   germanSubtitles: boolean;
   audioDescription: boolean;
-  releaseType: string;
+  releaseType: string | null;
   languageSource: string;
 }
 

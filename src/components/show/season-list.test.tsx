@@ -211,12 +211,20 @@ describe("SeasonList", () => {
         failed: false,
       },
     ];
-    const withRequests = (myRequests: unknown[]) =>
+    const withRequests = (myRequests: unknown[], episodes: unknown[] = []) =>
       ({
         ok: true,
         status: 200,
-        data: { show: { episodes: [], myRequests } },
+        data: { show: { episodes }, myRequests },
       }) as never;
+    const unplayable = {
+      id: "e",
+      season: 1,
+      episode: 1,
+      titleDe: null,
+      airDate: null,
+      nzbFiles: [{ id: "f", qualityTier: "1080p", resolution: null, s3Key: null, s3StreamKey: null }],
+    };
 
     it("offers Anfordern only for aired episodes without a version", async () => {
       const mixed = [
@@ -289,6 +297,33 @@ describe("SeasonList", () => {
       const row = document.getElementById("S01E01")!;
       await within(row).findByText("Wird geladen…");
       expect(within(row).queryByText("Anfordern")).toBeNull();
+    });
+
+    it("shows the download status for an episode whose only file is not playable yet", async () => {
+      mockGetShow.mockResolvedValue(
+        withRequests([{ season: 1, episode: 1, status: "downloading", waitReason: null }], [unplayable]),
+      );
+      render(<SeasonList showId={7} seasons={one("2022-02-18")} />);
+      const row = document.getElementById("S01E01")!;
+      await within(row).findByText("Wird geladen…");
+      expect(within(row).queryByText("Anfordern")).toBeNull();
+    });
+
+    it("offers requests for an episode whose only file is not playable", async () => {
+      mockGetShow.mockResolvedValue(withRequests([], [unplayable]));
+      render(<SeasonList showId={7} seasons={one("2022-02-18")} />);
+      const row = document.getElementById("S01E01")!;
+      await within(row).findByText("1080p");
+      expect(within(row).getByText("Anfordern")).toBeTruthy();
+      expect(screen.getByText("Staffel anfordern")).toBeTruthy();
+    });
+
+    it("toasts when TMDB does not know the requested episode", async () => {
+      vi.mocked(toast.error).mockClear();
+      mockRequest.mockResolvedValue({ ok: true, status: 200, data: { requests: [] } });
+      render(<SeasonList showId={7} seasons={one("2022-02-18")} />);
+      fireEvent.click(await screen.findByText("Anfordern"));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Folge bei TMDB nicht gefunden"));
     });
 
     it("shows searching for waiting without reason and offers re-request when expired", async () => {
