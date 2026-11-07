@@ -61,6 +61,8 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
   const [requests, setRequests] = useState<Map<string, EpisodeRequestView>>(
     new Map(),
   );
+  const [hasToken, setHasToken] = useState(false);
+  const [today, setToday] = useState<string | null>(null);
   const [requestingKeys, setRequestingKeys] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [playing, setPlaying] = useState<{ code: string; url: string } | null>(
@@ -73,6 +75,8 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
+    setHasToken(true);
+    setToday(localToday());
     let cancelled = false;
     getNzbShowByTmdb(showId, token)
       .then((res) => {
@@ -188,9 +192,8 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
     }
   }
 
-  const today = localToday();
-  const hasToken = Boolean(getToken());
-  const isAired = (e: EpisodeSummary) => !!e.air_date && e.air_date <= today;
+  const isAired = (e: EpisodeSummary) =>
+    !!e.air_date && today !== null && e.air_date <= today;
   const orderedSeasons = [...seasons].sort(
     (a, b) => a.summary.season_number - b.summary.season_number,
   );
@@ -209,144 +212,150 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
               const c = episodeCode(summary.season_number, e.episode_number);
               return (
                 isAired(e) &&
-                !bestVersion(versions.get(c) ?? [], "s3Key") &&
+                !(versions.get(c)?.length ?? 0) &&
                 !requests.has(c)
               );
             });
           return (
-          <div key={summary.season_number}>
-            <div className="mb-3 flex items-center gap-3">
-              <h3 className="text-lg font-semibold text-foreground">
-                {summary.season_number === 0 ? "Specials" : summary.name}
-              </h3>
-              {canRequestSeason && (
-                <button
-                  type="button"
-                  onClick={() => request(seasonKey, { season: summary.season_number })}
-                  disabled={requestingKeys.has(seasonKey)}
-                  className={requestButtonClass}
-                >
-                  Staffel anfordern
-                </button>
+            <div key={summary.season_number}>
+              <div className="mb-3 flex items-center gap-3">
+                <h3 className="text-lg font-semibold text-foreground">
+                  {summary.season_number === 0 ? "Specials" : summary.name}
+                </h3>
+                {canRequestSeason && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      request(seasonKey, { season: summary.season_number })
+                    }
+                    disabled={requestingKeys.has(seasonKey)}
+                    className={requestButtonClass}
+                  >
+                    Staffel anfordern
+                  </button>
+                )}
+              </div>
+              {failed && (
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Staffel konnte gerade nicht geladen werden.
+                </p>
               )}
-            </div>
-            {failed && (
-              <p className="mb-3 text-sm text-muted-foreground">
-                Staffel konnte gerade nicht geladen werden.
-              </p>
-            )}
-            <ul className="flex flex-col gap-2">
-              {[...episodes]
-                .sort((a, b) => a.episode_number - b.episode_number)
-                .map((episode) => {
-                  const code = episodeCode(
-                    summary.season_number,
-                    episode.episode_number,
-                  );
-                  const files = versions.get(code) ?? [];
-                  const streamVersion = bestVersion(files, "s3StreamKey");
-                  const downloadVersion = bestVersion(files, "s3Key");
-                  const hasVersion = files.length > 0;
-                  const req = requests.get(code);
-                  const canRequest = hasToken && isAired(episode);
-                  const busy = [streamVersion, downloadVersion].some(
-                    (v) => v !== undefined && busyId === v.id,
-                  );
+              <ul className="flex flex-col gap-2">
+                {[...episodes]
+                  .sort((a, b) => a.episode_number - b.episode_number)
+                  .map((episode) => {
+                    const code = episodeCode(
+                      summary.season_number,
+                      episode.episode_number,
+                    );
+                    const files = versions.get(code) ?? [];
+                    const streamVersion = bestVersion(files, "s3StreamKey");
+                    const downloadVersion = bestVersion(files, "s3Key");
+                    const hasVersion = files.length > 0;
+                    const req = requests.get(code);
+                    const canRequest = hasToken && isAired(episode);
+                    const busy = [streamVersion, downloadVersion].some(
+                      (v) => v !== undefined && busyId === v.id,
+                    );
 
-                  return (
-                    <li
-                      key={code}
-                      id={code}
-                      className="scroll-mt-20 rounded-lg border border-border/40 bg-card p-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <span className="text-sm text-foreground">
-                          <span className="text-muted-foreground">{code}</span>
-                          {" · "}
-                          {episode.name}
-                          {episode.air_date && (
+                    return (
+                      <li
+                        key={code}
+                        id={code}
+                        className="scroll-mt-20 rounded-lg border border-border/40 bg-card p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                          <span className="text-sm text-foreground">
                             <span className="text-muted-foreground">
-                              {" · "}
-                              {new Date(episode.air_date).toLocaleDateString("de-DE")}
+                              {code}
                             </span>
+                            {" · "}
+                            {episode.name}
+                            {episode.air_date && (
+                              <span className="text-muted-foreground">
+                                {" · "}
+                                {new Date(episode.air_date).toLocaleDateString(
+                                  "de-DE",
+                                )}
+                              </span>
+                            )}
+                          </span>
+                          {files.map((f) =>
+                            label(f) ? (
+                              <span
+                                key={f.id}
+                                className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                              >
+                                {label(f)}
+                              </span>
+                            ) : null,
                           )}
-                        </span>
-                        {files.map((f) =>
-                          label(f) ? (
-                            <span
-                              key={f.id}
-                              className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-                            >
-                              {label(f)}
-                            </span>
-                          ) : null,
-                        )}
-                        <div className="ml-auto flex gap-2">
-                          {streamVersion && (
-                            <button
-                              type="button"
-                              onClick={() => play(code, streamVersion.id)}
-                              disabled={busy}
-                              className="flex items-center gap-1.5 rounded-md bg-cinema-gold px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90 disabled:opacity-50"
-                            >
-                              {busy ? (
-                                <Loader2 className="size-3.5 animate-spin" />
-                              ) : (
-                                <Play className="size-3.5 fill-black" />
-                              )}
-                              Abspielen
-                            </button>
-                          )}
-                          {downloadVersion && (
-                            <button
-                              type="button"
-                              onClick={() => download(downloadVersion.id)}
-                              disabled={busy}
-                              className="flex items-center gap-1.5 rounded-md bg-cinema-gold/20 px-3 py-1.5 text-sm font-medium text-cinema-gold transition-colors hover:bg-cinema-gold/30 disabled:opacity-50"
-                            >
-                              <Download className="size-3.5" />
-                              Laden
-                            </button>
-                          )}
-                          {!hasVersion && hasToken && req && (
-                            <span className="text-sm text-muted-foreground">
-                              {requestNote(req)}
-                            </span>
-                          )}
-                          {!hasVersion &&
-                            canRequest &&
-                            (!req || req.status === "expired") && (
+                          <div className="ml-auto flex gap-2">
+                            {streamVersion && (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  request(code, {
-                                    season: summary.season_number,
-                                    episode: episode.episode_number,
-                                  })
-                                }
-                                disabled={requestingKeys.has(code)}
-                                className={requestButtonClass}
+                                onClick={() => play(code, streamVersion.id)}
+                                disabled={busy}
+                                className="flex items-center gap-1.5 rounded-md bg-cinema-gold px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90 disabled:opacity-50"
                               >
-                                {req ? "Erneut anfordern" : "Anfordern"}
+                                {busy ? (
+                                  <Loader2 className="size-3.5 animate-spin" />
+                                ) : (
+                                  <Play className="size-3.5 fill-black" />
+                                )}
+                                Abspielen
                               </button>
                             )}
+                            {downloadVersion && (
+                              <button
+                                type="button"
+                                onClick={() => download(downloadVersion.id)}
+                                disabled={busy}
+                                className="flex items-center gap-1.5 rounded-md bg-cinema-gold/20 px-3 py-1.5 text-sm font-medium text-cinema-gold transition-colors hover:bg-cinema-gold/30 disabled:opacity-50"
+                              >
+                                <Download className="size-3.5" />
+                                Laden
+                              </button>
+                            )}
+                            {!hasVersion && hasToken && req && (
+                              <span className="text-sm text-muted-foreground">
+                                {requestNote(req)}
+                              </span>
+                            )}
+                            {!hasVersion &&
+                              canRequest &&
+                              (!req || req.status === "expired") && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    request(code, {
+                                      season: summary.season_number,
+                                      episode: episode.episode_number,
+                                    })
+                                  }
+                                  disabled={requestingKeys.has(code)}
+                                  className={requestButtonClass}
+                                >
+                                  {req ? "Erneut anfordern" : "Anfordern"}
+                                </button>
+                              )}
+                          </div>
                         </div>
-                      </div>
-                      {playing?.code === code && (
-                        <div className="mt-3">
-                          <VideoPlayer
-                            src={playing.url}
-                            title={`${code} · ${episode.name}`}
-                            onClose={() => setPlaying(null)}
-                            autoPlay
-                          />
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-            </ul>
-          </div>
+                        {playing?.code === code && (
+                          <div className="mt-3">
+                            <VideoPlayer
+                              src={playing.url}
+                              title={`${code} · ${episode.name}`}
+                              onClose={() => setPlaying(null)}
+                              autoPlay
+                            />
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+              </ul>
+            </div>
           );
         })}
       </div>
