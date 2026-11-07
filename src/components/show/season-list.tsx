@@ -75,8 +75,11 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
+    // client-only values must be set after mount to keep SSR markup stable
+    /* eslint-disable react-hooks/set-state-in-effect */
     setHasToken(true);
     setToday(localToday());
+    /* eslint-enable react-hooks/set-state-in-effect */
     let cancelled = false;
     getNzbShowByTmdb(showId, token)
       .then((res) => {
