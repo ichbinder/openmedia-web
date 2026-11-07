@@ -39,8 +39,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
       {query && query.length >= 2 ? (
         <>
-          <SearchResults query={query} />
-          <ShowResults query={query} />
+          <Results query={query} />
         </>
       ) : (
         <Suspense>
@@ -51,24 +50,42 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   );
 }
 
-async function SearchResults({ query }: { query: string }) {
-  const data = await searchMovies(query);
+async function Results({ query }: { query: string }) {
+  const [data, shows] = await Promise.all([
+    searchMovies(query),
+    searchShows(query).then((r) => r.results).catch(() => []),
+  ]);
 
-  if (data.results.length === 0) {
+  if (data.results.length === 0 && shows.length === 0) {
     return (
       <p className="text-muted-foreground">
-        Keine Filme gefunden für &ldquo;{query}&rdquo;.
+        Nichts gefunden für &ldquo;{query}&rdquo;.
       </p>
     );
   }
 
+  return (
+    <>
+      {data.results.length > 0 && <MovieSection query={query} movies={data.results} />}
+      {shows.length > 0 && <ShowSection shows={shows} />}
+    </>
+  );
+}
+
+function MovieSection({
+  query,
+  movies,
+}: {
+  query: string;
+  movies: Awaited<ReturnType<typeof searchMovies>>["results"];
+}) {
   return (
     <section>
       <h2 className="mb-6 text-2xl font-bold tracking-tight text-foreground">
         Ergebnisse für &bdquo;{query}&ldquo;
       </h2>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {data.results.map((movie) => (
+        {movies.map((movie) => (
           <SearchMovieCard key={movie.id} movie={movie} />
         ))}
       </div>
@@ -76,16 +93,11 @@ async function SearchResults({ query }: { query: string }) {
   );
 }
 
-async function ShowResults({ query }: { query: string }) {
-  let shows;
-  try {
-    shows = (await searchShows(query)).results;
-  } catch {
-    return null;
-  }
-
-  if (shows.length === 0) return null;
-
+function ShowSection({
+  shows,
+}: {
+  shows: Awaited<ReturnType<typeof searchShows>>["results"];
+}) {
   return (
     <section className="mt-10">
       <h2 className="mb-6 text-2xl font-bold tracking-tight text-foreground">

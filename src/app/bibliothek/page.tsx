@@ -50,7 +50,7 @@ function LibraryContent() {
         <div>
           <p className="text-lg font-medium">Deine Bibliothek ist leer</p>
           <p className="text-sm">
-            Filme und Serien, die du herunterlädst erscheinen hier.
+            Filme und Serien, die du herunterlädst, erscheinen hier.
           </p>
         </div>
       </div>

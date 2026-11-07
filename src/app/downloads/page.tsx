@@ -8,6 +8,7 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 import { AssignMovieDialog } from "@/components/downloads/assign-movie-dialog";
 import { getPosterUrl } from "@/lib/tmdb";
 import type { DownloadJob } from "@/lib/backend";
+import { isEpisodeFilename } from "@/lib/episode-filename";
 import {
   AlertTriangle,
   AlertCircle,
@@ -188,7 +189,12 @@ function JobRow({ job, onAssignClick }: JobRowProps) {
 
       {/* Actions */}
       <div className="flex gap-1 shrink-0">
-        {isNeedsReview && onAssignClick && (
+        {isNeedsReview && isEpisodeFilename(job.nzbFile?.originalFilename) && (
+          <span className="px-3 py-1.5 text-xs text-muted-foreground">
+            Folge – wird automatisch zugeordnet
+          </span>
+        )}
+        {isNeedsReview && onAssignClick && !isEpisodeFilename(job.nzbFile?.originalFilename) && (
           <button
             onClick={() => onAssignClick(job.id)}
             className="rounded-md bg-amber-500/15 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/25 transition-colors"
