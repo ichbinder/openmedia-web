@@ -134,7 +134,11 @@ export function LibraryCard({
           {/* Stream button — navigates to detail page with auto-play */}
           {detailHref && item.nzbFile.s3StreamKey && (
             <Link
-              href={`${detailHref}#play`}
+              href={
+                episode
+                  ? `${detailHref}#S${String(episode.season).padStart(2, "0")}E${String(episode.episode).padStart(2, "0")}`
+                  : `${detailHref}#play`
+              }
               className="flex items-center justify-center rounded-md bg-cinema-gold px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90"
               title={episode ? "Folge abspielen" : "Film abspielen"}
             >

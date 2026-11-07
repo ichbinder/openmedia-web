@@ -72,7 +72,7 @@ describe("LibraryCard", () => {
     expect(screen.getByRole("img").getAttribute("src")).toContain("/s.jpg");
     const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/serie/95396");
-    expect(hrefs).toContain("/serie/95396#play");
+    expect(hrefs).toContain("/serie/95396#S02E05");
     expect(libraryItemLink(episodeItem)).toBe("/serie/95396");
   });
 
