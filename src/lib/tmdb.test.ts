@@ -5,6 +5,10 @@ import {
   getGenres,
   getMovieDetails,
   searchMovies,
+  getTrendingShows,
+  searchShows,
+  getShowDetails,
+  getSeasonDetails,
 } from "./tmdb";
 
 const mockFetch = vi.fn();
@@ -39,5 +43,33 @@ describe("TMDB movie cache", () => {
       expect.stringContaining(endpoint),
       { next: { revalidate } },
     ]);
+  });
+});
+
+describe("TMDB TV client", () => {
+  it.each([
+    ["getTrendingShows", () => getTrendingShows(), "trending/tv/week", 21600],
+    ["searchShows", () => searchShows("dark"), "search/tv", 3600],
+    ["getShowDetails", () => getShowDetails(5), "tv/5?", 86400],
+    ["getSeasonDetails", () => getSeasonDetails(5, 2), "tv/5/season/2", 86400],
+  ])("%s uses the right endpoint and TTL", async (_n, call, endpoint, revalidate) => {
+    await call();
+    expect(lastCall()).toEqual([
+      expect.stringContaining(endpoint),
+      { next: { revalidate } },
+    ]);
+  });
+
+  it("getShowDetails appends credits, videos and similar", async () => {
+    await getShowDetails(5);
+    expect(decodeURIComponent(lastCall()[0])).toContain(
+      "append_to_response=credits,videos,similar",
+    );
+  });
+
+  it("searchShows skips fetch for a blank query", async () => {
+    const res = await searchShows("  ");
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(res).toEqual({ page: 1, results: [], total_pages: 0, total_results: 0 });
   });
 });

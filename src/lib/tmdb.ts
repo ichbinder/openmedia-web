@@ -80,6 +80,58 @@ export interface MovieDetail extends Movie {
   similar: { results: Movie[] };
 }
 
+export interface Show {
+  id: number;
+  name: string;
+  original_name: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  vote_average: number;
+  first_air_date: string;
+  genre_ids: number[];
+}
+
+export interface SeasonSummary {
+  season_number: number;
+  name: string;
+  episode_count: number;
+  air_date: string | null;
+  poster_path: string | null;
+}
+
+export interface ShowDetail extends Show {
+  number_of_seasons: number;
+  seasons: SeasonSummary[];
+  genres: Genre[];
+  tagline: string | null;
+  credits: { cast: CastMember[] };
+  videos: { results: Video[] };
+  similar: { results: Show[] };
+}
+
+export interface EpisodeSummary {
+  episode_number: number;
+  name: string;
+  overview: string;
+  air_date: string | null;
+  still_path: string | null;
+  runtime: number | null;
+}
+
+export interface SeasonDetail {
+  season_number: number;
+  name: string;
+  episodes: EpisodeSummary[];
+}
+
+export interface ShowSearchResponse {
+  page: number;
+  results: Show[];
+  total_pages: number;
+  total_results: number;
+}
+
 // ---------------------------------------------------------------------------
 // Fetch wrapper
 // ---------------------------------------------------------------------------
@@ -191,6 +243,53 @@ export async function getMovieDetails(id: number): Promise<MovieDetail> {
   return tmdbFetch<MovieDetail>(`movie/${id}`, {
     append_to_response: "credits,videos,similar",
   }, TMDB_REVALIDATE.details);
+}
+
+/** Fetch the weekly trending TV shows list. */
+export async function getTrendingShows(): Promise<Show[]> {
+  const data = await tmdbFetch<{ results: Show[] }>(
+    "trending/tv/week",
+    undefined,
+    TMDB_REVALIDATE.lists,
+  );
+  return data.results;
+}
+
+/** Search TV shows by title; blank queries return empty results without a request. */
+export async function searchShows(
+  query: string,
+  page: number = 1,
+): Promise<ShowSearchResponse> {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { page: 1, results: [], total_pages: 0, total_results: 0 };
+  }
+  return tmdbFetch<ShowSearchResponse>(
+    "search/tv",
+    { query: trimmed, page: String(page) },
+    TMDB_REVALIDATE.search,
+  );
+}
+
+/** Fetch full show details including credits, videos, and similar shows. */
+export async function getShowDetails(id: number): Promise<ShowDetail> {
+  return tmdbFetch<ShowDetail>(
+    `tv/${id}`,
+    { append_to_response: "credits,videos,similar" },
+    TMDB_REVALIDATE.details,
+  );
+}
+
+/** Fetch one season with its episodes. */
+export async function getSeasonDetails(
+  id: number,
+  season: number,
+): Promise<SeasonDetail> {
+  return tmdbFetch<SeasonDetail>(
+    `tv/${id}/season/${season}`,
+    undefined,
+    TMDB_REVALIDATE.details,
+  );
 }
 
 // ---------------------------------------------------------------------------
