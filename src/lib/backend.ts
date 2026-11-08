@@ -196,7 +196,11 @@ export interface NzbShowInfo {
     episode: number;
     titleDe: string | null;
     airDate: string | null;
-    nzbFiles: (NzbFileInfo & { fileSize: string })[];
+    nzbFiles: (NzbFileInfo & {
+      fileSize: string;
+      originalFilename: string;
+      duration: number | null;
+    })[];
   }[];
 }
 
