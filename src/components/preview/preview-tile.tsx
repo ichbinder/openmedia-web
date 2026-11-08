@@ -151,7 +151,7 @@ export function PreviewTile({
                     src={trailerUrl(data.trailerKey)}
                     title={`Trailer: ${title}`}
                     allow="autoplay; encrypted-media"
-                    className="absolute inset-0 size-full"
+                    className="pointer-events-none absolute inset-0 size-full"
                   />
                   <button
                     type="button"

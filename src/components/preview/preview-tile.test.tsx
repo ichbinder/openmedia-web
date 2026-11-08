@@ -106,6 +106,12 @@ describe("PreviewTile", () => {
     expect(dialog.querySelector("img")).toBeNull();
   });
 
+  it("lets pointer events pass through the trailer so leaving it closes the preview", async () => {
+    await hover(renderTile(10));
+    const iframe = screen.getByRole("dialog").querySelector("iframe")!;
+    expect(iframe.classList.contains("pointer-events-none")).toBe(true);
+  });
+
   it("toggles the trailer sound via postMessage", async () => {
     await hover(renderTile(6));
     const iframe = screen.getByRole("dialog").querySelector("iframe")!;
