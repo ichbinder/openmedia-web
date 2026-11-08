@@ -59,7 +59,7 @@ const requestButtonClass =
   "flex items-center gap-1.5 rounded-md bg-cinema-gold/20 px-3 py-1.5 text-sm font-medium text-cinema-gold transition-colors hover:bg-cinema-gold/30 disabled:opacity-50";
 
 export function SeasonList({ showId, seasons }: SeasonListProps) {
-  const { getStreamUrl } = useDownloads();
+  const { getStreamUrl, refresh } = useDownloads();
   const [versions, setVersions] = useState<Map<string, Version[]>>(new Map());
   const [requests, setRequests] = useState<Map<string, EpisodeRequestView>>(
     new Map(),
@@ -171,6 +171,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
         return;
       }
       const returned = res.data.requests;
+      void refresh();
       setRequests((prev) => {
         const next = new Map(prev);
         returned.forEach((r) => next.set(episodeCode(r.season, r.episode), r));
@@ -209,6 +210,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
     setRequests((prev) =>
       new Map(prev).set(episodeCode(view.season, view.episode), view),
     );
+    void refresh();
   }
 
   const isAired = (e: EpisodeSummary) =>

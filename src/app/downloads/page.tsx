@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useDownloads, getStatusLabel, isJobStale } from "@/contexts/download-context";
@@ -235,6 +235,12 @@ function JobRow({ job, onAssignClick }: JobRowProps) {
 function DownloadsContent() {
   const { jobs, isLoading, refresh } = useDownloads();
   const [openAssignForJobId, setOpenAssignForJobId] = useState<string | null>(null);
+
+  // Episode requests start jobs on the server, so the list loaded at login
+  // may not know them and would never poll for their progress.
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   if (isLoading) {
     return (
