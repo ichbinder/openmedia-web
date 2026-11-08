@@ -43,6 +43,18 @@ const formatSize = (bytes: number) =>
   bytes < 1e9
     ? `${Math.round(bytes / 1e6)} MB`
     : `${(bytes / 1e9).toLocaleString("de-DE", { maximumFractionDigits: 1 })} GB`;
+// Same tier, size, duration and group would read the same; number repeats.
+const uniqueLabels = (files: Version[]) => {
+  const seen = new Map<string, number>();
+  return new Map(
+    files.map((f) => {
+      const text = versionLabel(f);
+      const n = (seen.get(text) ?? 0) + 1;
+      seen.set(text, n);
+      return [f.id, n > 1 ? `${text} (${n})` : text] as const;
+    }),
+  );
+};
 const versionLabel = (v: Version) =>
   [
     label(v),
@@ -290,11 +302,12 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                       .filter((f) => f.s3Key && f.status !== "broken")
                       .sort(byQuality);
                     const chosen = choices.find((f) => f.id === picked.get(code));
-                    const streamVersion = chosen
-                      ? chosen.s3StreamKey
-                        ? chosen
-                        : undefined
+                    const streamVersion = chosen?.s3StreamKey
+                      ? chosen
                       : bestVersion(files, "s3StreamKey");
+                    const playsOther =
+                      !!chosen && !!streamVersion && streamVersion !== chosen;
+                    const labels = uniqueLabels(choices);
                     const downloadVersion = chosen ?? bestVersion(files, "s3Key");
                     const hasVersion = isPlayable(files);
                     const req = requests.get(code);
@@ -349,7 +362,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                               >
                                 {choices.map((f) => (
                                   <option key={f.id} value={f.id}>
-                                    {versionLabel(f)}
+                                    {labels.get(f.id)}
                                   </option>
                                 ))}
                               </select>
@@ -359,6 +372,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                                 type="button"
                                 onClick={() => play(code, streamVersion.id)}
                                 disabled={busy}
+                                title={playsOther ? labels.get(streamVersion.id) : undefined}
                                 className="flex items-center gap-1.5 rounded-md bg-cinema-gold px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90 disabled:opacity-50"
                               >
                                 {busy ? (
@@ -366,7 +380,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                                 ) : (
                                   <Play className="size-3.5 fill-black" />
                                 )}
-                                Abspielen
+                                {playsOther ? "Andere Version abspielen" : "Abspielen"}
                               </button>
                             )}
                             {downloadVersion && (
