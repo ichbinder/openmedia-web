@@ -112,13 +112,20 @@ export function PreviewTile({
     const tile = tileRef.current;
     const preview = previewRef.current;
     if (!open || !tile || !preview) return;
-    const { left, top } = placePreview(
-      tile.getBoundingClientRect(),
-      { width: window.innerWidth, height: window.innerHeight },
-      { width: PREVIEW_WIDTH, height: preview.offsetHeight },
-    );
-    preview.style.left = `${left}px`;
-    preview.style.top = `${top}px`;
+    const place = () => {
+      const { left, top } = placePreview(
+        tile.getBoundingClientRect(),
+        { width: window.innerWidth, height: window.innerHeight },
+        { width: PREVIEW_WIDTH, height: preview.offsetHeight },
+      );
+      preview.style.left = `${left}px`;
+      preview.style.top = `${top}px`;
+    };
+    place();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(place);
+    observer.observe(preview);
+    return () => observer.disconnect();
   }, [open, data]);
 
   const backdropUrl = getBackdropUrl(data?.backdropPath ?? null, "w780");

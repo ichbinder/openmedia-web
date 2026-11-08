@@ -15,7 +15,7 @@ type Next =
   | { state: "done"; episode: EpisodeCode | null };
 
 const buttonClass =
-  "flex h-9 items-center rounded-md px-4 text-sm font-medium transition-colors";
+  "flex h-9 shrink-0 items-center rounded-md px-3 text-xs font-medium whitespace-nowrap transition-colors";
 
 export function ShowPreviewActions({
   showId,
@@ -43,7 +43,7 @@ export function ShowPreviewActions({
         }
         const had = res.ok
           ? [
-              ...res.data.myLibrary,
+              ...(res.data.myLibrary ?? []),
               ...res.data.myRequests.filter((r) => r.status !== "expired"),
             ]
           : [];
