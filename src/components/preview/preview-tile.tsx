@@ -117,7 +117,10 @@ export function PreviewTile({
     const place = () => {
       const { left, top } = placePreview(
         tile.getBoundingClientRect(),
-        { width: window.innerWidth, height: window.innerHeight },
+        {
+          width: document.documentElement.clientWidth || window.innerWidth,
+          height: window.innerHeight,
+        },
         { width: PREVIEW_WIDTH, height: preview.offsetHeight },
       );
       preview.style.left = `${left}px`;

@@ -161,6 +161,20 @@ describe("PreviewTile", () => {
     expect(mockedGetPreview).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps a right-edge preview clear of the vertical scrollbar", async () => {
+    const scrollbarFree = window.innerWidth - 15;
+    Object.defineProperty(document.documentElement, "clientWidth", {
+      configurable: true,
+      value: scrollbarFree,
+    });
+    const tile = renderTile(13);
+    tile.parentElement!.getBoundingClientRect = () =>
+      ({ left: window.innerWidth - 100, top: 100, width: 100, height: 100 }) as DOMRect;
+    await hover(tile);
+    expect(screen.getByRole("dialog").style.left).toBe(`${scrollbarFree - 8 - 360}px`);
+    delete (document.documentElement as { clientWidth?: number }).clientWidth;
+  });
+
   it("re-places the preview when its height changes and stops observing on close", async () => {
     let resize = () => {};
     const disconnect = vi.fn();
