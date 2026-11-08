@@ -1,17 +1,12 @@
 import type { Video } from "@/lib/tmdb";
+import { pickTrailer } from "@/lib/trailer";
 
 interface TrailerSectionProps {
   videos: Video[];
 }
 
 export function TrailerSection({ videos }: TrailerSectionProps) {
-  const trailers = videos.filter(
-    (v) => v.site === "YouTube" && v.type === "Trailer",
-  );
-
-  // Prefer official trailers, fall back to any YouTube trailer.
-  const trailer =
-    trailers.find((t) => t.official) ?? trailers[0] ?? null;
+  const trailer = pickTrailer(videos);
 
   if (!trailer) return null;
 

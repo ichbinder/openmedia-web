@@ -84,6 +84,18 @@ describe("TMDB TV client", () => {
     );
   });
 
+  it.each([
+    ["getMovieDetails", () => getMovieDetails(1)],
+    ["getShowDetails", () => getShowDetails(1)],
+  ])("%s requests German and English videos", async (_n, call) => {
+    await call();
+    const url = new URL(lastCall()[0]);
+    expect(url.searchParams.get("include_video_language")).toBe("de,en");
+    expect(url.searchParams.get("append_to_response")).toBe(
+      "credits,videos,similar",
+    );
+  });
+
   it("searchShows skips fetch for a blank query", async () => {
     const res = await searchShows("  ");
     expect(mockFetch).not.toHaveBeenCalled();
