@@ -65,6 +65,7 @@ export interface Video {
   site: string;
   type: string;
   official: boolean;
+  iso_639_1: string | null;
 }
 
 export interface MovieDetail extends Movie {
@@ -105,6 +106,7 @@ export interface ShowDetail extends Show {
   seasons: SeasonSummary[];
   genres: Genre[];
   tagline: string | null;
+  last_episode_to_air: { season_number: number; episode_number: number } | null;
   credits: { cast: CastMember[] };
   videos: { results: Video[] };
   similar: { results: Show[] };
@@ -252,6 +254,7 @@ export async function discoverMoviesByGenre(
 export async function getMovieDetails(id: number): Promise<MovieDetail> {
   return tmdbFetch<MovieDetail>(`movie/${id}`, {
     append_to_response: "credits,videos,similar",
+    include_video_language: "de,en",
   }, TMDB_REVALIDATE.details);
 }
 
@@ -285,7 +288,10 @@ export async function searchShows(
 export async function getShowDetails(id: number): Promise<ShowDetail> {
   return tmdbFetch<ShowDetail>(
     `tv/${id}`,
-    { append_to_response: "credits,videos,similar" },
+    {
+      append_to_response: "credits,videos,similar",
+      include_video_language: "de,en",
+    },
     TMDB_REVALIDATE.details,
   );
 }

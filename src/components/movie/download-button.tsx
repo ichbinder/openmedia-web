@@ -32,13 +32,18 @@ interface DownloadButtonProps {
     release_date: string;
   };
   className?: string;
+  hideWhenUnavailable?: boolean;
 }
 
 function sortByRes(a: NzbFileInfo, b: NzbFileInfo) {
   return qualityRank(a.qualityTier || a.resolution) - qualityRank(b.qualityTier || b.resolution);
 }
 
-export function DownloadButton({ movie, className }: DownloadButtonProps) {
+export function DownloadButton({
+  movie,
+  className,
+  hideWhenUnavailable = false,
+}: DownloadButtonProps) {
   const { user } = useAuth();
   const { jobs, startDownload, cancelJob, getLink, checkAvailability } =
     useDownloads();
@@ -192,6 +197,7 @@ export function DownloadButton({ movie, className }: DownloadButtonProps) {
   // ── Render: nothing available ─────────────────────────────
 
   if (visibleFiles.length === 0) {
+    if (hideWhenUnavailable) return null;
     return (
       <button
         disabled

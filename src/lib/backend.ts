@@ -1,3 +1,4 @@
+import type { EpisodeCode } from "./next-episode";
 /**
  * Backend API client — all calls go through the Next.js proxy
  * /api/backend/* → openmedia-api
@@ -205,7 +206,7 @@ export interface NzbShowInfo {
 }
 
 export async function getNzbShowByTmdb(tmdbId: number, token: string) {
-  return backendFetch<{ show: NzbShowInfo; myRequests: EpisodeRequestView[] }>(`/nzb/shows/by-tmdb/${tmdbId}`, { token });
+  return backendFetch<{ show: NzbShowInfo; myRequests: EpisodeRequestView[]; myLibrary: EpisodeCode[] }>(`/nzb/shows/by-tmdb/${tmdbId}`, { token });
 }
 
 export async function requestEpisodes(

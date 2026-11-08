@@ -17,6 +17,7 @@ interface SearchMovieCardProps {
  */
 export function SearchMovieCard({ movie }: SearchMovieCardProps) {
   const handleClick = (e: React.MouseEvent) => {
+    if (!e.currentTarget.contains(e.target as Node)) return;
     // Don't save to history when clicking the WatchlistButton overlay
     const target = e.target as HTMLElement;
     if (target.closest("[data-watchlist-button]")) return;
