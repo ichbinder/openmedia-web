@@ -176,6 +176,13 @@ export async function getNzbMovieByTmdb(tmdbId: number, token: string) {
   return backendFetch<{ movie: NzbMovieInfo }>(`/nzb/movies/by-tmdb/${tmdbId}`, { token });
 }
 
+export interface EpisodeRequestView {
+  season: number;
+  episode: number;
+  status: "searching" | "waiting" | "downloading" | "done" | "expired";
+  waitReason: "no_german" | "budget" | "indexer_error" | null;
+}
+
 export interface NzbShowInfo {
   id: string;
   tmdbId: number;
@@ -194,7 +201,43 @@ export interface NzbShowInfo {
 }
 
 export async function getNzbShowByTmdb(tmdbId: number, token: string) {
-  return backendFetch<{ show: NzbShowInfo }>(`/nzb/shows/by-tmdb/${tmdbId}`, { token });
+  return backendFetch<{ show: NzbShowInfo; myRequests: EpisodeRequestView[] }>(`/nzb/shows/by-tmdb/${tmdbId}`, { token });
+}
+
+export async function requestEpisodes(
+  body: { tmdbId: number; season: number; episode?: number; guid?: string },
+  token: string
+) {
+  return backendFetch<{
+    requests?: EpisodeRequestView[];
+    error?: string;
+    reason?: string;
+  }>("/series/requests", { method: "POST", body: JSON.stringify(body), token });
+}
+
+export interface ReleaseCandidate {
+  guid: string;
+  title: string;
+  qualityTier: string;
+  sizeBytes: number;
+  gbPerHour: number;
+  inTargetBand: boolean;
+  germanSubtitles: boolean;
+  audioDescription: boolean;
+  releaseType: string | null;
+  languageSource: string;
+}
+
+export async function getReleaseCandidates(
+  tmdbId: number,
+  season: number,
+  episode: number,
+  token: string
+) {
+  return backendFetch<{ candidates: ReleaseCandidate[] }>(
+    `/series/candidates?tmdbId=${tmdbId}&season=${season}&episode=${episode}`,
+    { token }
+  );
 }
 
 // ── Download Links ───────────────────────────────────────────
