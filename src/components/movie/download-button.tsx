@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import {
   Download,
   Loader2,
@@ -9,12 +10,13 @@ import {
   AlertTriangle,
   ChevronDown,
   Check,
+  Clock,
 } from "lucide-react";
 import { useDownloads, getStatusLabel } from "@/contexts/download-context";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import { cn, qualityRank } from "@/lib/utils";
-import type { NzbFileInfo, DownloadJob } from "@/lib/backend";
+import { cn } from "@/lib/utils";
+import type { DownloadJob, MovieCandidate } from "@/lib/backend";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +24,16 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface DownloadButtonProps {
   movie: {
@@ -35,8 +47,91 @@ interface DownloadButtonProps {
   hideWhenUnavailable?: boolean;
 }
 
-function sortByRes(a: NzbFileInfo, b: NzbFileInfo) {
-  return qualityRank(a.qualityTier || a.resolution) - qualityRank(b.qualityTier || b.resolution);
+const LANGUAGE_NAMES: Record<string, string> = {
+  de: "Deutsch",
+  en: "Englisch",
+  fr: "Französisch",
+  es: "Spanisch",
+  it: "Italienisch",
+  ja: "Japanisch",
+  ko: "Koreanisch",
+  ru: "Russisch",
+  pt: "Portugiesisch",
+  nl: "Niederländisch",
+};
+
+const GROUPS: { label: string; match: (c: MovieCandidate) => boolean }[] = [
+  { label: "Deutsch", match: (c) => c.state !== "broken" && c.group === "german" },
+  { label: "Kein Deutsch", match: (c) => c.state !== "broken" && c.group === "foreign" },
+  { label: "Kino-Mitschnitt", match: (c) => c.state !== "broken" && c.group === "cam" },
+  { label: "Fehlerhaft", match: (c) => c.state === "broken" },
+];
+
+const REQUEST_ERRORS: Record<string, string> = {
+  candidate_gone: "Version nicht mehr verfügbar",
+  failed: "Keine passende Version konnte geladen werden",
+};
+
+const TERMINAL_JOB_STATUSES = new Set(["completed", "failed", "expired"]);
+
+const isOwnFile = (c: MovieCandidate) => c.key.startsWith("file:");
+
+const languageNames = (c: MovieCandidate) =>
+  c.audioLanguages.flatMap((code) => LANGUAGE_NAMES[code] ?? []);
+
+function onlyLanguage(c: MovieCandidate): string | null {
+  const names = languageNames(c);
+  return names.length === 1 && names[0] !== LANGUAGE_NAMES.de ? names[0] : null;
+}
+
+function warningBadge(c: MovieCandidate): string | null {
+  if (c.group === "cam") return "Kino-Mitschnitt";
+  if (c.group === "german") return null;
+  const name = onlyLanguage(c);
+  return name ? `Nur ${name}` : "Kein Deutsch";
+}
+
+function confirmTexts(c: MovieCandidate) {
+  if (c.group === "cam") {
+    return {
+      title: "Kino-Mitschnitt",
+      text: "Diese Version wurde im Kino abgefilmt. Bild und Ton sind schlecht. Trotzdem laden?",
+      action: "Trotzdem laden",
+    };
+  }
+  const name = onlyLanguage(c);
+  return {
+    title: "Kein deutscher Ton",
+    text: name
+      ? `Diesen Film gibt es bisher nur auf ${name}. Trotzdem laden?`
+      : "Diesen Film gibt es bisher nicht auf Deutsch. Trotzdem laden?",
+    action: name ? `${name} laden` : "Trotzdem laden",
+  };
+}
+
+const formatGb = (bytes: number) =>
+  `${(bytes / 1e9).toLocaleString("de-DE", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} GB`;
+
+function rowTitle(c: MovieCandidate) {
+  const parts = isOwnFile(c)
+    ? ["eigene NZB", c.hashPrefix]
+    : [c.releaseType ?? "Unbekannt", c.sizeBytes && formatGb(c.sizeBytes)];
+  return [c.qualityTier, ...parts].filter(Boolean).join(" · ");
+}
+
+function rowDetails(c: MovieCandidate, recommended: boolean) {
+  return [
+    languageNames(c).join(" + ") || "Sprache unbekannt",
+    c.germanSubtitles && "Untertitel DE",
+    c.audioDescription && "Hörfilm",
+    isOwnFile(c) && "schon im Bestand",
+    recommended && "Empfohlen",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function DownloadButton({
@@ -45,122 +140,112 @@ export function DownloadButton({
   hideWhenUnavailable = false,
 }: DownloadButtonProps) {
   const { user } = useAuth();
-  const { jobs, startDownload, cancelJob, getLink, checkAvailability } =
+  const { jobs, cancelJob, getLink, loadMovieCandidates, requestMovie } =
     useDownloads();
   const router = useRouter();
 
-  const [nzbFiles, setNzbFiles] = useState<NzbFileInfo[]>([]);
-  const [checkedFor, setCheckedFor] = useState<string | null>(null);
-  const [startingId, setStartingId] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<MovieCandidate[]>([]);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [budgetHit, setBudgetHit] = useState(false);
+  const [confirming, setConfirming] = useState<{
+    candidate: MovieCandidate;
+    manual: boolean;
+  } | null>(null);
 
-  const checkKey = user ? `${user.id}|${movie.id}` : null;
-  const isChecking = checkKey !== null && checkedFor !== checkKey;
+  const loadKey = user ? `${user.id}|${movie.id}` : null;
+  const isLoading = loadKey !== null && loadedFor !== loadKey;
 
-  // Fetch NZB files for this movie
+  const fetchCandidates = useCallback(
+    async () => (await loadMovieCandidates(movie.id)) ?? [],
+    [loadMovieCandidates, movie.id],
+  );
+
   useEffect(() => {
-    if (!user) return;
+    if (!loadKey) return;
     let cancelled = false;
-    checkAvailability(movie.id)
-      .then((files) => {
-        if (!cancelled) setNzbFiles(files);
-      })
-      .finally(() => {
-        if (!cancelled) setCheckedFor(`${user.id}|${movie.id}`);
-      });
+    fetchCandidates().then((list) => {
+      if (cancelled) return;
+      setCandidates(list);
+      setLoadedFor(loadKey);
+    });
     return () => {
       cancelled = true;
     };
-  }, [user, movie.id, checkAvailability]);
+  }, [loadKey, fetchCandidates]);
 
-  // Re-fetch when any job completes so s3Key is up to date
-  const completedJobIds = jobs
+  const candidateFileIds = new Set(candidates.flatMap((c) => c.nzbFileId ?? []));
+  const finishedJobIds = jobs
     .filter(
       (j) =>
-        nzbFiles.some((f) => f.id === j.nzbFileId) && j.status === "completed"
+        candidateFileIds.has(j.nzbFileId) &&
+        (j.status === "completed" || j.status === "failed"),
     )
     .map((j) => j.id)
     .sort()
     .join(",");
 
   useEffect(() => {
-    if (!completedJobIds || !user) return;
+    if (!finishedJobIds) return;
     let cancelled = false;
-    checkAvailability(movie.id).then((files) => {
-      if (!cancelled) setNzbFiles(files);
+    fetchCandidates().then((list) => {
+      if (!cancelled) setCandidates(list);
     });
     return () => {
       cancelled = true;
     };
-  }, [completedJobIds, user, movie.id, checkAvailability]);
+  }, [finishedJobIds, fetchCandidates]);
 
-  // ── Derived state ─────────────────────────────────────────
-
-  // Filter out NZBs with 3+ failures (completely hidden)
-  // Defensive fallback: if failedAttempts is missing (old API), treat as 0
-  const visibleFiles = nzbFiles.filter((f) => (f.failedAttempts ?? 0) < 3);
-
-  // Categorize
-  const downloadedFiles = visibleFiles.filter((f) => f.s3Key);
-  const brokenFiles = visibleFiles.filter(
-    (f) => (f.status === "broken" || f.status === "expired") && !f.s3Key
+  const activeJobs = new Map(
+    jobs
+      .filter((j) => !TERMINAL_JOB_STATUSES.has(j.status))
+      .map((j) => [j.nzbFileId, j]),
   );
-  const availableFiles = visibleFiles.filter(
-    (f) => f.status !== "broken" && f.status !== "expired" && !f.s3Key
-  );
+  const jobFor = (c: MovieCandidate) =>
+    c.nzbFileId ? activeJobs.get(c.nzbFileId) : undefined;
 
-  // Sort each group by quality tier (falls back to resolution for old entries)
-  downloadedFiles.sort(sortByRes);
-  availableFiles.sort(sortByRes);
-  brokenFiles.sort(sortByRes);
+  async function download(c: MovieCandidate) {
+    if (!c.nzbFileId) return;
+    const url = await getLink(c.nzbFileId).catch(() => null);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  }
 
-  // Memoized index: nzbFileId → active DownloadJob (O(1) lookups)
-  const activeJobsByFileId = useMemo(() => {
-    const map = new Map<string, DownloadJob>();
-    for (const j of jobs) {
-      if (j.status !== "completed" && j.status !== "failed") {
-        map.set(j.nzbFileId, j);
+  async function request(c: MovieCandidate, manual: boolean, confirmed = false) {
+    if (c.group !== "german" && !confirmed) {
+      setConfirming({ candidate: c, manual });
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await requestMovie({
+        tmdbId: movie.id,
+        key: c.key,
+        ...(confirmed && { confirmed }),
+        ...(manual && { manual }),
+      });
+      if (res.status === 429) {
+        setBudgetHit(true);
+        return;
       }
-    }
-    return map;
-  }, [jobs]);
-
-  function getActiveJob(nzbFileId: string): DownloadJob | undefined {
-    return activeJobsByFileId.get(nzbFileId);
-  }
-
-  // ── Handlers ──────────────────────────────────────────────
-
-  async function handleDownloadClick(fileId: string) {
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-    try {
-      const url = await getLink(fileId);
-      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      if (res.reason === "confirm_required") {
+        setConfirming({ candidate: c, manual });
+        return;
+      }
+      if (!res.ok) toast.error(REQUEST_ERRORS[res.reason ?? ""] ?? "Anfordern fehlgeschlagen");
+      setCandidates(await fetchCandidates());
     } catch {
-      // Network error — download context handles toast notifications
-    }
-  }
-
-  async function handleStartDownload(fileId: string) {
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-    setStartingId(fileId);
-    try {
-      await startDownload(fileId);
+      toast.error("Anfordern fehlgeschlagen");
     } finally {
-      setStartingId(null);
+      setBusy(false);
     }
   }
 
-  async function handleCancelDownload(jobId: string) {
-    await cancelJob(jobId);
+  function handleRowClick(c: MovieCandidate) {
+    const job = jobFor(c);
+    if (job) cancelJob(job.id);
+    else if (c.state === "ready") download(c);
+    else request(c, true);
   }
-
-  // ── Render: not logged in ─────────────────────────────────
 
   if (!user) {
     return (
@@ -177,9 +262,10 @@ export function DownloadButton({
     );
   }
 
-  // ── Render: loading ───────────────────────────────────────
+  const best = candidates.find((c) => c.state !== "broken");
 
-  if (isChecking) {
+  if (isLoading || !best) {
+    if (!isLoading && hideWhenUnavailable) return null;
     return (
       <button
         disabled
@@ -188,318 +274,222 @@ export function DownloadButton({
           className
         )}
       >
+        {isLoading ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <XCircle className="size-4" />
+        )}
+        {isLoading ? "Suche Versionen…" : "Keine Version gefunden"}
+      </button>
+    );
+  }
+
+  const activeJob = candidates.map(jobFor).find(Boolean);
+  const badge = warningBadge(best);
+  const tone = activeJob
+    ? "bg-cinema-gold/20 text-cinema-gold"
+    : best.state === "ready"
+      ? "bg-cinema-gold text-black hover:bg-cinema-gold/90"
+      : budgetHit
+        ? "bg-muted text-muted-foreground"
+        : "bg-green-500/20 text-green-400 hover:bg-green-500/30";
+
+  let main;
+  if (activeJob) {
+    main = (
+      <>
         <Loader2 className="size-4 animate-spin" />
-        Verfügbarkeit prüfen…
-      </button>
+        {getStatusLabel(activeJob.status)} · {activeJob.progress}%
+      </>
     );
-  }
-
-  // ── Render: nothing available ─────────────────────────────
-
-  if (visibleFiles.length === 0) {
-    if (hideWhenUnavailable) return null;
-    return (
-      <button
-        disabled
-        className={cn(
-          "flex items-center gap-2 rounded-md bg-muted px-4 py-2 text-sm font-medium text-muted-foreground opacity-50",
-          className
-        )}
-      >
-        <XCircle className="size-4" />
-        Nicht verfügbar
-      </button>
+  } else if (best.state === "ready") {
+    main = (
+      <>
+        <Download className="size-4" />
+        Herunterladen
+        <span className="rounded bg-black/20 px-1.5 py-0.5 text-xs">{best.qualityTier}</span>
+      </>
     );
-  }
-
-  // ── Render: single usable file → direct button ────────────
-
-  const usableFiles = [...downloadedFiles, ...availableFiles];
-  const hasActiveDownload = visibleFiles.some((f) => getActiveJob(f.id));
-
-  if (usableFiles.length === 1 && brokenFiles.length === 0 && !hasActiveDownload) {
-    const file = usableFiles[0];
-    if (file.s3Key) {
-      // Downloaded → gold button
-      return (
-        <button
-          onClick={() => handleDownloadClick(file.id)}
-          className={cn(
-            "flex items-center gap-2 rounded-md bg-cinema-gold px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-cinema-gold/90",
-            className
-          )}
-        >
-          <Download className="size-4" />
-          Herunterladen
-          {(file.qualityTier || file.resolution) && (
-            <span className="rounded bg-black/20 px-1.5 py-0.5 text-xs">
-              {file.qualityTier || file.resolution}
-            </span>
-          )}
-        </button>
-      );
-    }
-    // Available → green button
-    return (
-      <button
-        onClick={() => handleStartDownload(file.id)}
-        disabled={startingId === file.id}
-        className={cn(
-          "flex items-center gap-2 rounded-md bg-green-500/20 px-4 py-2 text-sm font-medium text-green-400 transition-colors hover:bg-green-500/30",
-          className
-        )}
-      >
-        {startingId === file.id ? (
+  } else if (budgetHit) {
+    main = (
+      <>
+        <Clock className="size-4" />
+        Tageslimit erreicht — morgen wieder
+      </>
+    );
+  } else {
+    main = (
+      <>
+        {busy ? (
           <Loader2 className="size-4 animate-spin" />
         ) : (
           <CloudDownload className="size-4" />
         )}
         Verfügbar machen
-        {(file.qualityTier || file.resolution) && (
-          <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-xs">
-            {file.qualityTier || file.resolution}
+        <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-xs">{best.qualityTier}</span>
+        {badge && (
+          <span className="rounded bg-amber-500/25 px-1.5 py-0.5 text-xs text-amber-400">
+            {badge}
           </span>
         )}
-      </button>
+      </>
     );
   }
 
-  // ── Render: dropdown with all NZBs ────────────────────────
-
-  // Determine the trigger button style based on best available state
-  const hasSomeDownloaded = downloadedFiles.length > 0;
-  const hasSomeActive = hasActiveDownload;
-
-  // Find the best active job for the trigger display
-  const bestActiveJob = visibleFiles
-    .map((f) => getActiveJob(f.id))
-    .find(Boolean);
+  const groups = GROUPS.map((g) => ({ ...g, items: candidates.filter(g.match) })).filter(
+    (g) => g.items.length > 0,
+  );
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <div className="flex">
+      <button
+        onClick={() => (best.state === "ready" ? download(best) : request(best, false))}
+        disabled={busy || !!activeJob || (budgetHit && best.state !== "ready")}
         className={cn(
-          "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors cursor-pointer",
-          hasSomeDownloaded
-            ? "bg-cinema-gold text-black hover:bg-cinema-gold/90"
-            : hasSomeActive
-              ? "bg-cinema-gold/20 text-cinema-gold hover:bg-cinema-gold/30"
-              : "bg-green-500/20 text-green-400 hover:bg-green-500/30",
+          "flex items-center gap-2 rounded-l-md px-4 py-2 text-sm font-medium transition-colors",
+          tone,
           className
         )}
       >
-        {hasSomeActive ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : hasSomeDownloaded ? (
-          <Download className="size-4" />
-        ) : (
-          <CloudDownload className="size-4" />
-        )}
-        {hasSomeDownloaded
-          ? "Herunterladen"
-          : hasSomeActive && bestActiveJob
-            ? getStatusLabel(bestActiveJob.status)
-            : "Verfügbar machen"}
-        <ChevronDown className="size-3.5 opacity-60" />
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent align="start" className="w-72">
-        {/* Downloaded files */}
-        {downloadedFiles.length > 0 && (
-          <>
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-              Bereit zum Herunterladen
+        {main}
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label="Alle Versionen"
+          className={cn(
+            "flex cursor-pointer items-center rounded-r-md border-l border-current/20 px-2 transition-colors",
+            tone
+          )}
+        >
+          <ChevronDown className="size-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80">
+          {groups.map((g, i) => (
+            <div key={g.label}>
+              {i > 0 && <DropdownMenuSeparator />}
+              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                {g.label}
+              </div>
+              {g.items.map((c) => (
+                <CandidateItem
+                  key={c.key}
+                  candidate={c}
+                  recommended={c === candidates[0]}
+                  activeJob={jobFor(c)}
+                  disabled={busy}
+                  onClick={() => handleRowClick(c)}
+                />
+              ))}
             </div>
-            {downloadedFiles.map((file) => (
-              <NzbDropdownItem
-                key={file.id}
-                file={file}
-                variant="downloaded"
-                activeJob={getActiveJob(file.id)}
-                startingId={startingId}
-                onDownload={handleDownloadClick}
-                onStart={handleStartDownload}
-                onCancel={handleCancelDownload}
-              />
-            ))}
-          </>
-        )}
-
-        {/* Available files */}
-        {availableFiles.length > 0 && (
-          <>
-            {downloadedFiles.length > 0 && <DropdownMenuSeparator />}
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-              Verfügbar
-            </div>
-            {availableFiles.map((file) => (
-              <NzbDropdownItem
-                key={file.id}
-                file={file}
-                variant="available"
-                activeJob={getActiveJob(file.id)}
-                startingId={startingId}
-                onDownload={handleDownloadClick}
-                onStart={handleStartDownload}
-                onCancel={handleCancelDownload}
-              />
-            ))}
-          </>
-        )}
-
-        {/* Broken files */}
-        {brokenFiles.length > 0 && (
-          <>
-            {(downloadedFiles.length > 0 || availableFiles.length > 0) && (
-              <DropdownMenuSeparator />
-            )}
-            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-              Fehlerhaft
-            </div>
-            {brokenFiles.map((file) => (
-              <NzbDropdownItem
-                key={file.id}
-                file={file}
-                variant="broken"
-                activeJob={undefined}
-                startingId={startingId}
-                onDownload={handleDownloadClick}
-                onStart={handleStartDownload}
-                onCancel={handleCancelDownload}
-              />
-            ))}
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {confirming && (
+        <ConfirmDialog
+          candidate={confirming.candidate}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            setConfirming(null);
+            request(confirming.candidate, confirming.manual, true);
+          }}
+        />
+      )}
+    </div>
   );
 }
 
-// ── NZB Dropdown Item ──────────────────────────────────────────
-
-interface NzbDropdownItemProps {
-  file: NzbFileInfo;
-  variant: "downloaded" | "available" | "broken";
-  activeJob: DownloadJob | undefined;
-  startingId: string | null;
-  onDownload: (fileId: string) => void;
-  onStart: (fileId: string) => void;
-  onCancel: (jobId: string) => void;
-}
-
-function NzbDropdownItem({
-  file,
-  variant,
+function CandidateItem({
+  candidate: c,
+  recommended,
   activeJob,
-  startingId,
-  onDownload,
-  onStart,
-  onCancel,
-}: NzbDropdownItemProps) {
-  const isBroken = variant === "broken";
-  const isDownloading = !!activeJob;
-  const isStarting = startingId === file.id;
-
-  function handleClick(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (isBroken) return;
-
-    if (isDownloading && activeJob) {
-      onCancel(activeJob.id);
-      return;
-    }
-
-    if (variant === "downloaded") {
-      onDownload(file.id);
-    } else {
-      onStart(file.id);
-    }
-  }
+  disabled,
+  onClick,
+}: {
+  candidate: MovieCandidate;
+  recommended: boolean;
+  activeJob: DownloadJob | undefined;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const isBroken = c.state === "broken";
+  const isReady = c.state === "ready";
 
   return (
     <DropdownMenuItem
-      onClick={handleClick}
-      disabled={isBroken}
-      className={cn(
-        "flex items-center justify-between gap-3 px-3 py-2.5",
-        isBroken && "opacity-50"
-      )}
+      onClick={onClick}
+      disabled={isBroken || disabled}
+      className={cn("flex items-center justify-between gap-3 px-3 py-2.5", isBroken && "opacity-50")}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        {/* Status icon */}
+      <div className="flex min-w-0 items-center gap-2">
         {isBroken ? (
           <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-        ) : isDownloading ? (
+        ) : activeJob ? (
           <Loader2 className="size-3.5 shrink-0 animate-spin text-cinema-gold" />
-        ) : variant === "downloaded" ? (
+        ) : isReady ? (
           <Check className="size-3.5 shrink-0 text-cinema-gold" />
         ) : (
           <CloudDownload className="size-3.5 shrink-0 text-green-400" />
         )}
-
-        {/* File info */}
-        <div className="flex flex-col min-w-0">
-          <span
-            className={cn(
-              "text-sm font-medium",
-              isBroken && "line-through text-muted-foreground"
-            )}
-          >
-            {file.qualityTier || file.resolution || "Unbekannt"}
-            {file.hash && (
-              <span className="ml-1.5 text-xs text-muted-foreground font-normal">
-                {file.hash.slice(0, 8)}
-              </span>
-            )}
+        <div className="flex min-w-0 flex-col">
+          <span className={cn("text-sm font-medium", isBroken && "line-through text-muted-foreground")}>
+            {rowTitle(c)}
           </span>
-
-          {/* Subtitle: status info */}
-          {isDownloading && activeJob && (
+          {isBroken ? (
+            c.brokenReason && (
+              <span className="max-w-[220px] truncate text-xs text-destructive">
+                {c.brokenReason}
+              </span>
+            )
+          ) : (
+            <span className="text-xs text-muted-foreground">{rowDetails(c, recommended)}</span>
+          )}
+          {activeJob && (
             <span className="text-xs text-cinema-gold">
               {getStatusLabel(activeJob.status)} · {activeJob.progress}%
             </span>
           )}
-          {isBroken && file.brokenReason && (
-            <span className="text-xs text-destructive truncate max-w-[200px]">
-              {file.brokenReason}
-            </span>
-          )}
-          {variant === "downloaded" && !isDownloading && (
-            <span className="text-xs text-muted-foreground">Bereit</span>
-          )}
         </div>
       </div>
-
-      {/* Action badge */}
       {!isBroken && (
         <span
           className={cn(
             "shrink-0 rounded px-2 py-0.5 text-xs font-medium",
-            isDownloading
+            activeJob || isReady
               ? "bg-cinema-gold/20 text-cinema-gold"
-              : variant === "downloaded"
-                ? "bg-cinema-gold/20 text-cinema-gold"
-                : isStarting
-                  ? "bg-green-500/20 text-green-400"
-                  : "bg-green-500/10 text-green-400"
+              : "bg-green-500/10 text-green-400"
           )}
         >
-          {isStarting ? (
-            <Loader2 className="size-3 animate-spin" />
-          ) : isDownloading ? (
-            "Abbrechen"
-          ) : variant === "downloaded" ? (
-            "Download"
-          ) : (
-            "Starten"
-          )}
+          {activeJob ? "Abbrechen" : isReady ? "Download" : "Starten"}
         </span>
       )}
     </DropdownMenuItem>
   );
 }
 
-// Re-export for backward compatibility
+function ConfirmDialog({
+  candidate,
+  onCancel,
+  onConfirm,
+}: {
+  candidate: MovieCandidate;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const texts = confirmTexts(candidate);
+  return (
+    <AlertDialog open onOpenChange={(open) => !open && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{texts.title}</AlertDialogTitle>
+          <AlertDialogDescription>{texts.text}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>{texts.action}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export { DownloadButton as ProvisionButton };

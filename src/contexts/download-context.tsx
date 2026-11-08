@@ -15,12 +15,16 @@ import { getToken } from "@/lib/auth";
 import {
   type DownloadJob,
   type NzbFileInfo,
+  type MovieCandidate,
+  type MovieRequestBody,
   createDownloadJob,
   getDownloadJobs,
   deleteDownloadJob,
   getNzbMovieByTmdb,
   getDownloadLink,
   getStreamLink as getStreamLinkApi,
+  getMovieCandidates,
+  requestMovieDownload,
 } from "@/lib/backend";
 
 // ── Constants ────────────────────────────────────────────────
@@ -78,6 +82,10 @@ interface DownloadContextValue {
   getJobForFile: (nzbFileId: string) => DownloadJob | undefined;
   /** Check if a TMDB movie has NZB files available */
   checkAvailability: (tmdbId: number) => Promise<NzbFileInfo[]>;
+  loadMovieCandidates: (tmdbId: number) => Promise<MovieCandidate[] | null>;
+  requestMovie: (
+    body: MovieRequestBody
+  ) => Promise<{ ok: boolean; status: number; reason?: string }>;
   /** Get presigned download URL for an NZB file (original) */
   getLink: (nzbFileId: string) => Promise<string | null>;
   /** Get presigned stream URL for an NZB file (browser-compatible MP4) */
@@ -393,6 +401,29 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const loadMovieCandidates = useCallback(
+    async (tmdbId: number): Promise<MovieCandidate[] | null> => {
+      const token = getToken();
+      if (!token) return null;
+
+      const res = await getMovieCandidates(tmdbId, token).catch(() => null);
+      return res?.ok ? res.data.candidates : null;
+    },
+    []
+  );
+
+  const requestMovie = useCallback(
+    async (body: MovieRequestBody) => {
+      const token = getToken();
+      if (!token) return { ok: false, status: 401 };
+
+      const res = await requestMovieDownload(body, token);
+      if (res.ok) await fetchJobs().catch(() => undefined);
+      return { ok: res.ok, status: res.status, reason: res.data?.reason };
+    },
+    [fetchJobs]
+  );
+
   // ── Get presigned download link (original file) ───────────
   const getLink = useCallback(
     async (nzbFileId: string): Promise<string | null> => {
@@ -439,6 +470,8 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         cancelJob,
         getJobForFile,
         checkAvailability,
+        loadMovieCandidates,
+        requestMovie,
         getLink,
         getStreamUrl,
         activeCount,

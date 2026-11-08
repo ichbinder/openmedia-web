@@ -245,6 +245,50 @@ export async function getReleaseCandidates(
   );
 }
 
+// ── Movies ───────────────────────────────────────────────────
+
+export interface MovieCandidate {
+  key: string;
+  nzbFileId: string | null;
+  guid: string | null;
+  title: string;
+  group: "german" | "foreign" | "cam";
+  state: "ready" | "available" | "indexer" | "broken";
+  qualityTier: "2160p" | "1080p" | "720p" | "480p";
+  releaseType: string | null;
+  sizeBytes: number | null;
+  audioLanguages: string[];
+  germanSubtitles: boolean;
+  audioDescription: boolean;
+  inTargetBand: boolean;
+  hashPrefix: string | null;
+  brokenReason: string | null;
+}
+
+export async function getMovieCandidates(tmdbId: number, token: string) {
+  return backendFetch<{ candidates: MovieCandidate[]; indexer: "ok" | "unavailable" }>(
+    `/movies/candidates?tmdbId=${tmdbId}`,
+    { token }
+  );
+}
+
+export interface MovieRequestBody {
+  tmdbId: number;
+  key: string;
+  confirmed?: boolean;
+  manual?: boolean;
+}
+
+export async function requestMovieDownload(body: MovieRequestBody, token: string) {
+  return backendFetch<{
+    status: "ready" | "downloading";
+    nzbFileId: string;
+    reason?: string;
+    group?: string;
+    error?: string;
+  }>("/movies/requests", { method: "POST", body: JSON.stringify(body), token });
+}
+
 // ── Download Links ───────────────────────────────────────────
 
 export interface DownloadLink {
