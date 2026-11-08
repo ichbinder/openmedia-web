@@ -34,10 +34,24 @@ const episodeCode = (season: number, episode: number) =>
   `S${pad(season)}E${pad(episode)}`;
 const isPlayable = (files: Version[] | undefined) =>
   !!files?.some((f) => f.s3Key && f.status !== "broken");
+const byQuality = (a: Version, b: Version) =>
+  qualityRank(label(a)) - qualityRank(label(b)) ||
+  (Number(b.fileSize) || 0) - (Number(a.fileSize) || 0);
 const bestVersion = (files: Version[], key: "s3Key" | "s3StreamKey") =>
-  files
-    .filter((f) => f[key])
-    .sort((a, b) => qualityRank(label(a)) - qualityRank(label(b)))[0];
+  files.filter((f) => f[key] && f.status !== "broken").sort(byQuality)[0];
+const formatSize = (bytes: number) =>
+  bytes < 1e9
+    ? `${Math.round(bytes / 1e6)} MB`
+    : `${(bytes / 1e9).toLocaleString("de-DE", { maximumFractionDigits: 1 })} GB`;
+const versionLabel = (v: Version) =>
+  [
+    label(v),
+    Number(v.fileSize) > 0 && formatSize(Number(v.fileSize)),
+    v.duration && `${Math.max(1, Math.round(v.duration / 60))} Min`,
+    v.originalFilename?.replace(/\.nzb$/i, "").split("-").pop(),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
 const localToday = () => {
   const d = new Date();
@@ -69,6 +83,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
   const [requestingKeys, setRequestingKeys] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Map<string, string>>(new Map());
   const [playing, setPlaying] = useState<{ code: string; url: string } | null>(
     null,
   );
@@ -271,8 +286,16 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                       episode.episode_number,
                     );
                     const files = versions.get(code) ?? [];
-                    const streamVersion = bestVersion(files, "s3StreamKey");
-                    const downloadVersion = bestVersion(files, "s3Key");
+                    const choices = files
+                      .filter((f) => f.s3Key && f.status !== "broken")
+                      .sort(byQuality);
+                    const chosen = choices.find((f) => f.id === picked.get(code));
+                    const streamVersion = chosen
+                      ? chosen.s3StreamKey
+                        ? chosen
+                        : undefined
+                      : bestVersion(files, "s3StreamKey");
+                    const downloadVersion = chosen ?? bestVersion(files, "s3Key");
                     const hasVersion = isPlayable(files);
                     const req = requests.get(code);
                     const canRequest = hasToken && isAired(episode);
@@ -313,6 +336,24 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                             ) : null,
                           )}
                           <div className="ml-auto flex gap-2">
+                            {choices.length > 1 && (
+                              <select
+                                aria-label={`Version für ${code}`}
+                                value={downloadVersion?.id}
+                                onChange={(e) =>
+                                  setPicked((prev) =>
+                                    new Map(prev).set(code, e.target.value),
+                                  )
+                                }
+                                className="rounded-md border border-border/40 bg-background px-2 py-1 text-xs text-foreground"
+                              >
+                                {choices.map((f) => (
+                                  <option key={f.id} value={f.id}>
+                                    {versionLabel(f)}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                             {streamVersion && (
                               <button
                                 type="button"

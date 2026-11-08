@@ -170,6 +170,35 @@ describe("SeasonList", () => {
     await waitFor(() => expect(mockGetStreamUrl).toHaveBeenCalledWith("b"));
   });
 
+  it("prefers the larger of two versions and plays the one picked in the list", async () => {
+    const version = (id: string, fileSize: string, duration: number, group: string) => ({
+      id,
+      qualityTier: "1080p",
+      resolution: null,
+      s3Key: "k",
+      s3StreamKey: "s",
+      status: "untested",
+      fileSize,
+      duration,
+      originalFilename: `Show.S01E01.GERMAN.DL.1080p.WEB.h264-${group}.nzb`,
+    });
+    mockGetShow.mockResolvedValue(
+      showWith([version("sample", "47385232", 63, "SAUERKRAUT"), version("full", "2909735046", 3240, "ZeroTwo")]),
+    );
+    mockGetStreamUrl.mockResolvedValue("http://stream");
+    render(<SeasonList showId={1} seasons={seasons} />);
+    const row = document.getElementById("S01E01")!;
+    const select = (await within(row).findByLabelText("Version für S01E01")) as HTMLSelectElement;
+    expect(select.value).toBe("full");
+    expect(within(row).getByText("1080p · 2,9 GB · 54 Min · ZeroTwo")).toBeTruthy();
+    expect(within(row).getByText("1080p · 47 MB · 1 Min · SAUERKRAUT")).toBeTruthy();
+    fireEvent.click(within(row).getByText("Abspielen"));
+    await waitFor(() => expect(mockGetStreamUrl).toHaveBeenCalledWith("full"));
+    fireEvent.change(select, { target: { value: "sample" } });
+    fireEvent.click(within(row).getByText("Abspielen"));
+    await waitFor(() => expect(mockGetStreamUrl).toHaveBeenLastCalledWith("sample"));
+  });
+
   it("plays and renders the player when Abspielen is clicked", async () => {
     mockGetShow.mockResolvedValue(
       showWith([{ id: "f", qualityTier: "1080p", resolution: null, s3Key: "k", s3StreamKey: "s" }]),
