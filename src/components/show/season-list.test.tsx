@@ -329,6 +329,46 @@ describe("SeasonList", () => {
       expect(within(row).queryByText("Wird geladen…")).toBeNull();
     });
 
+    it("offers requests for an episode whose only stored file is broken", async () => {
+      const broken = {
+        ...unplayable,
+        nzbFiles: [{ ...unplayable.nzbFiles[0], s3Key: "k", status: "broken" }],
+      };
+      mockGetShow.mockResolvedValue(withRequests([], [broken]));
+      render(<SeasonList showId={7} seasons={one("2022-02-18")} />);
+      const row = document.getElementById("S01E01")!;
+      await within(row).findByText("1080p");
+      expect(within(row).getByText("Anfordern")).toBeTruthy();
+    });
+
+    it("offers a season request when the only missing episode expired", async () => {
+      mockGetShow.mockResolvedValue(
+        withRequests([{ season: 1, episode: 1, status: "expired", waitReason: null }]),
+      );
+      render(<SeasonList showId={7} seasons={one("2022-02-18")} />);
+      await within(document.getElementById("S01E01")!).findByText("Erneut anfordern");
+      expect(screen.getByText("Staffel anfordern")).toBeTruthy();
+    });
+
+    it("keeps a fresh request status when the initial load answers later", async () => {
+      let answer!: (v: unknown) => void;
+      mockGetShow.mockReturnValue(new Promise((r) => (answer = r)) as never);
+      mockRequest.mockResolvedValue({
+        ok: true,
+        status: 200,
+        data: { requests: [{ season: 1, episode: 1, status: "downloading", waitReason: null }] },
+      });
+      render(<SeasonList showId={7} seasons={one("2022-02-18")} />);
+      const row = document.getElementById("S01E01")!;
+      fireEvent.click(await within(row).findByText("Anfordern"));
+      await within(row).findByText("Wird geladen…");
+      answer(withRequests([]));
+      await waitFor(() => expect(mockGetShow).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 0));
+      expect(within(row).getByText("Wird geladen…")).toBeTruthy();
+      expect(within(row).queryByText("Anfordern")).toBeNull();
+    });
+
     it("toasts when TMDB does not know the requested episode", async () => {
       vi.mocked(toast.error).mockClear();
       mockRequest.mockResolvedValue({ ok: true, status: 200, data: { requests: [] } });

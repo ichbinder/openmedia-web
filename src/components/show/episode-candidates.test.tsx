@@ -55,7 +55,7 @@ describe("EpisodeCandidates", () => {
   });
 
   it("sends the guid and reports the episode view", async () => {
-    listing([candidate()]);
+    listing([candidate(), candidate({ guid: "g2" })]);
     const view = { season: 1, episode: 2, status: "downloading", waitReason: null };
     mockRequest.mockResolvedValue({
       ok: true,
@@ -64,10 +64,10 @@ describe("EpisodeCandidates", () => {
     } as never);
     const onRequested = vi.fn();
     render(<EpisodeCandidates tmdbId={7} season={1} episode={2} onRequested={onRequested} />);
-    fireEvent.click(await screen.findByText("Diese laden"));
+    fireEvent.click((await screen.findAllByText("Diese laden"))[1]);
     await waitFor(() => expect(onRequested).toHaveBeenCalledWith(view));
     expect(mockRequest).toHaveBeenCalledWith(
-      { tmdbId: 7, season: 1, episode: 2, guid: "g1" },
+      { tmdbId: 7, season: 1, episode: 2, guid: "g2" },
       "tok",
     );
     expect(toast.success).toHaveBeenCalledWith("Version angefordert");

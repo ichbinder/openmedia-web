@@ -33,7 +33,7 @@ const label = (v: Version) => v.qualityTier || v.resolution;
 const episodeCode = (season: number, episode: number) =>
   `S${pad(season)}E${pad(episode)}`;
 const isPlayable = (files: Version[] | undefined) =>
-  !!files?.some((f) => f.s3Key);
+  !!files?.some((f) => f.s3Key && f.status !== "broken");
 const bestVersion = (files: Version[], key: "s3Key" | "s3StreamKey") =>
   files
     .filter((f) => f[key])
@@ -100,14 +100,10 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
           ]),
         );
         setVersions(loaded);
-        setRequests(
-          new Map(
-            (res.data.myRequests ?? []).map((r) => [
-              episodeCode(r.season, r.episode),
-              r,
-            ]),
-          ),
+        const initial = (res.data.myRequests ?? []).map(
+          (r) => [episodeCode(r.season, r.episode), r] as const,
         );
+        setRequests((prev) => new Map([...initial, ...prev]));
         const code = window.location.hash.slice(1);
         const stream = bestVersion(loaded.get(code) ?? [], "s3StreamKey");
         if (stream && !autoPlayed.current) {
@@ -236,7 +232,8 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
               return (
                 isAired(e) &&
                 !isPlayable(versions.get(c)) &&
-                (!requests.has(c) || requests.get(c)?.status === "done")
+                (!requests.has(c) ||
+                  ["done", "expired"].includes(requests.get(c)!.status))
               );
             });
           return (
