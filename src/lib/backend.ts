@@ -253,6 +253,7 @@ export interface MovieCandidate {
   guid: string | null;
   title: string;
   group: "german" | "foreign" | "cam";
+  german: boolean;
   state: "ready" | "available" | "indexer" | "broken";
   qualityTier: "2160p" | "1080p" | "720p" | "480p";
   releaseType: string | null;

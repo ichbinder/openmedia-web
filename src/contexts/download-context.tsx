@@ -413,7 +413,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       if (!token) return null;
 
       const res = await getMovieCandidates(tmdbId, token).catch(() => null);
-      return res?.ok ? res.data.candidates : null;
+      return res?.ok ? res.data?.candidates ?? null : null;
     },
     []
   );

@@ -41,6 +41,7 @@ function candidate(overrides: Partial<MovieCandidate> = {}): MovieCandidate {
     guid: "de1080",
     title: "Matrix.1999.German.1080p.WEB-DL",
     group: "german",
+    german: true,
     state: "indexer",
     qualityTier: "1080p",
     releaseType: "WEB-DL",
@@ -59,6 +60,7 @@ const english = candidate({
   key: "guid:en1080",
   guid: "en1080",
   group: "foreign",
+  german: false,
   audioLanguages: ["en"],
   germanSubtitles: false,
 });
@@ -234,15 +236,10 @@ describe("DownloadButton", () => {
     expect(loadMovieCandidates).toHaveBeenCalledTimes(2);
   });
 
-  it("a ready click requests the version and then opens the link", async () => {
+  it("a ready click opens the link without waiting for requestMovie", async () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
     loadMovieCandidates.mockResolvedValue([readyFile]);
-    requestMovie.mockResolvedValue({
-      ok: true,
-      status: 200,
-      outcome: "ready",
-      nzbFileId: ownFile.nzbFileId,
-    });
+    requestMovie.mockReturnValue(new Promise(() => {}));
     getLink.mockResolvedValue("https://s3.example/matrix.mkv");
     render(<DownloadButton movie={movie} />);
     fireEvent.click(await screen.findByText("Herunterladen"));
@@ -253,9 +250,37 @@ describe("DownloadButton", () => {
         "noopener,noreferrer",
       ),
     );
-    expect(requestMovie).toHaveBeenCalledWith({ tmdbId: 603, key: ownFile.key });
     expect(getLink).toHaveBeenCalledWith(ownFile.nzbFileId);
+    expect(requestMovie).toHaveBeenCalledWith({ tmdbId: 603, key: ownFile.key });
+    expect(getLink.mock.invocationCallOrder[0]).toBeLessThan(
+      requestMovie.mock.invocationCallOrder[0],
+    );
     open.mockRestore();
+  });
+
+  it("asks before opening a ready cinema rip", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    loadMovieCandidates.mockResolvedValue([{ ...readyFile, group: "cam" }]);
+    getLink.mockResolvedValue("https://s3.example/matrix.mkv");
+    render(<DownloadButton movie={movie} />);
+    fireEvent.click(await screen.findByText("Herunterladen"));
+    fireEvent.click(await screen.findByText("Trotzdem laden"));
+    await waitFor(() => expect(open).toHaveBeenCalled());
+    expect(requestMovie).toHaveBeenCalledWith({ tmdbId: 603, key: ownFile.key, confirmed: true });
+    open.mockRestore();
+  });
+
+  it("shows the warning badge on the gold button for a ready foreign or cam version", async () => {
+    loadMovieCandidates.mockResolvedValue([{ ...readyFile, group: "cam" }]);
+    const { unmount } = render(<DownloadButton movie={movie} />);
+    const camButton = (await screen.findByText("Herunterladen")).closest("button");
+    expect(camButton?.textContent).toContain("Kino-Mitschnitt");
+    unmount();
+
+    loadMovieCandidates.mockResolvedValue([{ ...readyFile, group: "foreign", audioLanguages: ["en"] }]);
+    render(<DownloadButton movie={movie} />);
+    const foreignButton = (await screen.findByText("Herunterladen")).closest("button");
+    expect(foreignButton?.textContent).toContain("Nur Englisch");
   });
 
   it("shows 'Bereit' on a ready row", async () => {

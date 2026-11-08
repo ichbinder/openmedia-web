@@ -209,14 +209,21 @@ export function DownloadButton({
       setConfirming({ candidate: c, manual });
       return;
     }
+    const body = {
+      tmdbId: movie.id,
+      key: c.key,
+      ...(confirmed && { confirmed }),
+      ...(manual && { manual }),
+    };
+    if (c.state === "ready" && c.nzbFileId) {
+      const url = await getLink(c.nzbFileId).catch(() => null);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      requestMovie(body).catch(() => undefined);
+      return;
+    }
     setBusy(true);
     try {
-      const res = await requestMovie({
-        tmdbId: movie.id,
-        key: c.key,
-        ...(confirmed && { confirmed }),
-        ...(manual && { manual }),
-      });
+      const res = await requestMovie(body);
       if (res.status === 429) {
         setBudgetHit(true);
         return;
@@ -226,10 +233,6 @@ export function DownloadButton({
         return;
       }
       if (!res.ok) toast.error(REQUEST_ERRORS[res.reason ?? ""] ?? "Anfordern fehlgeschlagen");
-      if (res.outcome === "ready" && res.nzbFileId) {
-        const url = await getLink(res.nzbFileId).catch(() => null);
-        if (url) window.open(url, "_blank", "noopener,noreferrer");
-      }
       setCandidates(await fetchCandidates());
     } catch {
       toast.error("Anfordern fehlgeschlagen");
@@ -281,7 +284,12 @@ export function DownloadButton({
 
   const best = candidates.find((c) => c.state !== "broken");
   const activeJob = candidates.map(jobFor).find(Boolean);
-  const badge = best && warningBadge(best);
+  const badgeText = best && warningBadge(best);
+  const badge = badgeText && (
+    <span className="rounded bg-amber-500/25 px-1.5 py-0.5 text-xs text-amber-400">
+      {badgeText}
+    </span>
+  );
   const tone = !best
     ? "bg-muted text-muted-foreground"
     : activeJob
@@ -313,6 +321,7 @@ export function DownloadButton({
         <Download className="size-4" />
         Herunterladen
         <span className="rounded bg-black/20 px-1.5 py-0.5 text-xs">{best.qualityTier}</span>
+        {badge}
       </>
     );
   } else if (budgetHit) {
@@ -332,11 +341,7 @@ export function DownloadButton({
         )}
         Verfügbar machen
         <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-xs">{best.qualityTier}</span>
-        {badge && (
-          <span className="rounded bg-amber-500/25 px-1.5 py-0.5 text-xs text-amber-400">
-            {badge}
-          </span>
-        )}
+        {badge}
       </>
     );
   }
