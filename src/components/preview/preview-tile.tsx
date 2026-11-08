@@ -18,10 +18,12 @@ function loadPreview(kind: "movie" | "tv", id: number) {
   const key = `${kind}:${id}`;
   let preview = previewCache.get(key);
   if (!preview) {
-    preview = getPreview(kind, id).catch(() => {
-      previewCache.delete(key);
-      return null;
-    });
+    preview = getPreview(kind, id)
+      .catch(() => null)
+      .then((data) => {
+        if (!data) previewCache.delete(key);
+        return data;
+      });
     previewCache.set(key, preview);
   }
   return preview;
@@ -101,10 +103,10 @@ export function PreviewTile({
       if (event.key === "Escape") dismiss();
     };
     document.addEventListener("keydown", dismissOnEscape);
-    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("scroll", dismiss);
     return () => {
       document.removeEventListener("keydown", dismissOnEscape);
-      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("scroll", dismiss);
     };
   }, [open]);
 

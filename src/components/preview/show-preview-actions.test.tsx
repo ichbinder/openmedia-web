@@ -79,9 +79,15 @@ describe("ShowPreviewActions", () => {
     await screen.findByText("Nächste: Staffel 1, Folge 4");
   });
 
+  it("tolerates an older API without myLibrary", async () => {
+    mockGetShow.mockResolvedValue(showResponse(undefined as never));
+    render(<ShowPreviewActions showId={7} data={data} />);
+    await screen.findByText("Nächste: Staffel 1, Folge 1");
+  });
+
   it("counts open requests as present", async () => {
     mockGetShow.mockResolvedValue(
-      showResponse(library(3), [{ season: 1, episode: 4, status: "pending" }]),
+      showResponse(library(3), [{ season: 1, episode: 4, status: "searching" }]),
     );
     render(<ShowPreviewActions showId={7} data={data} />);
     await screen.findByText("Nächste: Staffel 1, Folge 5");

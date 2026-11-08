@@ -144,9 +144,47 @@ describe("PreviewTile", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("closes on scroll", async () => {
+  it("closes on page scroll but not when an inner element scrolls", async () => {
     await hover(renderTile(9));
+    fireEvent.scroll(screen.getByRole("dialog"));
+    expect(screen.getByRole("dialog")).toBeTruthy();
     fireEvent.scroll(window);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("retries the lookup after a failed one", async () => {
+    mockedGetPreview.mockResolvedValueOnce(null);
+    const tile = renderTile(11);
+    await hover(tile);
+    fireEvent.keyDown(document, { key: "Escape" });
+    await hover(tile);
+    expect(mockedGetPreview).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-places the preview when its height changes and stops observing on close", async () => {
+    let resize = () => {};
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resize = callback;
+        }
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+    const tile = renderTile(12);
+    tile.parentElement!.getBoundingClientRect = () =>
+      ({ left: 0, top: 400, width: 100, height: 100 }) as DOMRect;
+    await hover(tile);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.style.top).toBe("390px");
+    Object.defineProperty(dialog, "offsetHeight", { value: 500 });
+    act(() => resize());
+    expect(dialog.style.top).toBe(`${window.innerHeight - 8 - 500}px`);
+    const disconnects = disconnect.mock.calls.length;
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(disconnect).toHaveBeenCalledTimes(disconnects + 1);
   });
 });
