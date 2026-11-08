@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Check,
   Clock,
+  RotateCw,
 } from "lucide-react";
 import { useDownloads, getStatusLabel } from "@/contexts/download-context";
 import { useAuth } from "@/contexts/auth-context";
@@ -72,16 +73,19 @@ const REQUEST_ERRORS: Record<string, string> = {
   failed: "Keine passende Version konnte geladen werden",
 };
 
+const toastRequestError = (reason?: string) =>
+  toast.error(REQUEST_ERRORS[reason ?? ""] ?? "Anfordern fehlgeschlagen");
+
 const TERMINAL_JOB_STATUSES = new Set(["completed", "failed", "expired"]);
 
 const isOwnFile = (c: MovieCandidate) => c.key.startsWith("file:");
 
 const languageNames = (c: MovieCandidate) =>
-  c.audioLanguages.flatMap((code) => LANGUAGE_NAMES[code] ?? []);
+  c.audioLanguages.map((code) => LANGUAGE_NAMES[code] ?? code);
 
 function onlyLanguage(c: MovieCandidate): string | null {
-  const names = languageNames(c);
-  return names.length === 1 && names[0] !== LANGUAGE_NAMES.de ? names[0] : null;
+  const [code] = c.audioLanguages;
+  return c.audioLanguages.length === 1 && code !== "de" ? LANGUAGE_NAMES[code] ?? null : null;
 }
 
 function warningBadge(c: MovieCandidate): string | null {
@@ -91,7 +95,7 @@ function warningBadge(c: MovieCandidate): string | null {
   return name ? `Nur ${name}` : "Kein Deutsch";
 }
 
-function confirmTexts(c: MovieCandidate) {
+function confirmTexts(c: MovieCandidate, manual: boolean) {
   if (c.group === "cam") {
     return {
       title: "Kino-Mitschnitt",
@@ -100,11 +104,16 @@ function confirmTexts(c: MovieCandidate) {
     };
   }
   const name = onlyLanguage(c);
+  const reason = manual
+    ? name
+      ? `Diese Version ist nur auf ${name}.`
+      : "Diese Version hat keinen deutschen Ton."
+    : name
+      ? `Diesen Film gibt es bisher nur auf ${name}.`
+      : "Diesen Film gibt es bisher nicht auf Deutsch.";
   return {
     title: "Kein deutscher Ton",
-    text: name
-      ? `Diesen Film gibt es bisher nur auf ${name}. Trotzdem laden?`
-      : "Diesen Film gibt es bisher nicht auf Deutsch. Trotzdem laden?",
+    text: `${reason} Trotzdem laden?`,
     action: name ? `${name} laden` : "Trotzdem laden",
   };
 }
@@ -148,6 +157,8 @@ export function DownloadButton({
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [budgetHit, setBudgetHit] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [confirming, setConfirming] = useState<{
     candidate: MovieCandidate;
     manual: boolean;
@@ -157,22 +168,28 @@ export function DownloadButton({
   const isLoading = loadKey !== null && loadedFor !== loadKey;
 
   const fetchCandidates = useCallback(
-    async () => (await loadMovieCandidates(movie.id)) ?? [],
+    () => loadMovieCandidates(movie.id),
     [loadMovieCandidates, movie.id],
   );
+
+  async function reloadCandidates() {
+    const list = await fetchCandidates();
+    if (list) setCandidates(list);
+  }
 
   useEffect(() => {
     if (!loadKey) return;
     let cancelled = false;
     fetchCandidates().then((list) => {
       if (cancelled) return;
-      setCandidates(list);
+      setCandidates(list ?? []);
+      setLoadFailed(list === null);
       setLoadedFor(loadKey);
     });
     return () => {
       cancelled = true;
     };
-  }, [loadKey, fetchCandidates]);
+  }, [loadKey, loadAttempt, fetchCandidates]);
 
   const candidateFileIds = new Set(candidates.flatMap((c) => c.nzbFileId ?? []));
   const finishedJobIds = jobs
@@ -189,7 +206,7 @@ export function DownloadButton({
     if (!finishedJobIds) return;
     let cancelled = false;
     fetchCandidates().then((list) => {
-      if (!cancelled) setCandidates(list);
+      if (!cancelled && list) setCandidates(list);
     });
     return () => {
       cancelled = true;
@@ -218,7 +235,13 @@ export function DownloadButton({
     if (c.state === "ready" && c.nzbFileId) {
       const url = await getLink(c.nzbFileId).catch(() => null);
       if (url) window.open(url, "_blank", "noopener,noreferrer");
-      requestMovie(body).catch(() => undefined);
+      requestMovie(body)
+        .then((res) => {
+          if (res.ok) return;
+          toastRequestError(res.reason);
+          return reloadCandidates();
+        })
+        .catch(() => undefined);
       return;
     }
     setBusy(true);
@@ -229,11 +252,11 @@ export function DownloadButton({
         return;
       }
       if (res.reason === "confirm_required") {
-        setConfirming({ candidate: c, manual });
+        setConfirming({ candidate: { ...c, group: res.group ?? c.group }, manual });
         return;
       }
-      if (!res.ok) toast.error(REQUEST_ERRORS[res.reason ?? ""] ?? "Anfordern fehlgeschlagen");
-      setCandidates(await fetchCandidates());
+      if (!res.ok) toastRequestError(res.reason);
+      await reloadCandidates();
     } catch {
       toast.error("Anfordern fehlgeschlagen");
     } finally {
@@ -262,6 +285,24 @@ export function DownloadButton({
     );
   }
 
+  if (!isLoading && loadFailed) {
+    return (
+      <button
+        onClick={() => {
+          setLoadedFor(null);
+          setLoadAttempt((n) => n + 1);
+        }}
+        className={cn(
+          "flex items-center gap-2 rounded-md bg-muted px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/80",
+          className
+        )}
+      >
+        <RotateCw className="size-4" />
+        Suche fehlgeschlagen — erneut versuchen
+      </button>
+    );
+  }
+
   if (isLoading || candidates.length === 0) {
     if (!isLoading && hideWhenUnavailable) return null;
     return (
@@ -283,7 +324,8 @@ export function DownloadButton({
   }
 
   const best = candidates.find((c) => c.state !== "broken");
-  const activeJob = candidates.map(jobFor).find(Boolean);
+  const activeJob =
+    best?.state === "ready" ? jobFor(best) : candidates.map(jobFor).find(Boolean);
   const badgeText = best && warningBadge(best);
   const badge = badgeText && (
     <span className="rounded bg-amber-500/25 px-1.5 py-0.5 text-xs text-amber-400">
@@ -397,6 +439,7 @@ export function DownloadButton({
       {confirming && (
         <ConfirmDialog
           candidate={confirming.candidate}
+          manual={confirming.manual}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
             setConfirming(null);
@@ -485,14 +528,16 @@ function CandidateItem({
 
 function ConfirmDialog({
   candidate,
+  manual,
   onCancel,
   onConfirm,
 }: {
   candidate: MovieCandidate;
+  manual: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const texts = confirmTexts(candidate);
+  const texts = confirmTexts(candidate, manual);
   return (
     <AlertDialog open onOpenChange={(open) => !open && onCancel()}>
       <AlertDialogContent>

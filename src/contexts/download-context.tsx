@@ -91,6 +91,7 @@ interface DownloadContextValue {
     reason?: string;
     outcome?: "ready" | "downloading";
     nzbFileId?: string;
+    group?: MovieCandidate["group"];
   }>;
   /** Get presigned download URL for an NZB file (original) */
   getLink: (nzbFileId: string) => Promise<string | null>;
@@ -431,6 +432,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         reason: res.data?.reason,
         outcome: res.data?.status,
         nzbFileId: res.data?.nzbFileId,
+        group: res.data?.group,
       };
     },
     [fetchJobs]

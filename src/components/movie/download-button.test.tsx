@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import type { MovieCandidate } from "@/lib/backend";
+import type { DownloadJob, MovieCandidate } from "@/lib/backend";
 import { DownloadButton } from "./download-button";
 
-const { loadMovieCandidates, requestMovie, getLink, toastError } = vi.hoisted(() => ({
+const { loadMovieCandidates, requestMovie, getLink, toastError, downloads } = vi.hoisted(() => ({
   loadMovieCandidates: vi.fn(),
   requestMovie: vi.fn(),
   getLink: vi.fn(),
   toastError: vi.fn(),
+  downloads: { jobs: [] as unknown[] },
 }));
 
 vi.mock("@/contexts/auth-context", () => ({
@@ -16,7 +17,7 @@ vi.mock("@/contexts/auth-context", () => ({
 vi.mock("@/contexts/download-context", () => ({
   getStatusLabel: (s: string) => s,
   useDownloads: () => ({
-    jobs: [],
+    jobs: downloads.jobs,
     cancelJob: vi.fn(),
     getLink,
     loadMovieCandidates,
@@ -87,8 +88,13 @@ const ownFile = candidate({
 
 const readyFile = candidate({ ...ownFile, state: "ready", audioLanguages: ["de"] });
 
+function job(nzbFileId: string, status: DownloadJob["status"]) {
+  return { id: `job-${nzbFileId}`, nzbFileId, status, progress: 34 } as DownloadJob;
+}
+
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  downloads.jobs = [];
   loadMovieCandidates.mockResolvedValue([]);
   requestMovie.mockResolvedValue({ ok: true, status: 200 });
 });
@@ -255,6 +261,9 @@ describe("DownloadButton", () => {
     expect(getLink.mock.invocationCallOrder[0]).toBeLessThan(
       requestMovie.mock.invocationCallOrder[0],
     );
+    expect(open.mock.invocationCallOrder[0]).toBeLessThan(
+      requestMovie.mock.invocationCallOrder[0],
+    );
     open.mockRestore();
   });
 
@@ -306,7 +315,85 @@ describe("DownloadButton", () => {
     loadMovieCandidates.mockResolvedValue([readyFile]);
     render(<DownloadButton movie={movie} />);
     const button = (await screen.findByText("Herunterladen")).closest("button");
-    expect(button?.className).toContain("bg-cinema-gold");
+    expect(button?.classList.contains("bg-cinema-gold")).toBe(true);
     expect(button?.textContent).toContain("1080p");
+  });
+
+  it("names unknown languages and does not call a mixed version 'Nur Englisch'", async () => {
+    loadMovieCandidates.mockResolvedValue([{ ...english, audioLanguages: ["en", "polish"] }]);
+    render(<DownloadButton movie={movie} />);
+    expect(await screen.findByText("Kein Deutsch")).toBeTruthy();
+    expect(screen.queryByText("Nur Englisch")).toBeNull();
+    await openList();
+    expect(await screen.findByText("Englisch + polish · Empfohlen")).toBeTruthy();
+  });
+
+  it("asks about the picked version, not the whole film, for a manual pick", async () => {
+    loadMovieCandidates.mockResolvedValue([candidate(), english]);
+    render(<DownloadButton movie={movie} />);
+    await openList();
+    fireEvent.click(await screen.findByText("Englisch"));
+    expect(await screen.findByText("Diese Version ist nur auf Englisch. Trotzdem laden?")).toBeTruthy();
+    expect(screen.queryByText(/Diesen Film gibt es bisher/)).toBeNull();
+  });
+
+  it("offers a retry instead of 'Keine Version gefunden' when loading fails", async () => {
+    loadMovieCandidates.mockResolvedValueOnce(null).mockResolvedValueOnce([candidate()]);
+    render(<DownloadButton movie={movie} hideWhenUnavailable />);
+    fireEvent.click(await screen.findByText("Suche fehlgeschlagen — erneut versuchen"));
+    expect(await screen.findByText("Verfügbar machen")).toBeTruthy();
+    expect(screen.queryByText("Keine Version gefunden")).toBeNull();
+  });
+
+  it("keeps the list when reloading it after a request fails", async () => {
+    loadMovieCandidates.mockResolvedValueOnce([candidate()]).mockResolvedValueOnce(null);
+    render(<DownloadButton movie={movie} />);
+    fireEvent.click(await screen.findByText("Verfügbar machen"));
+    await waitFor(() => expect(loadMovieCandidates).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByText("Verfügbar machen").closest("button")?.disabled).toBe(false),
+    );
+  });
+
+  it("toasts and reloads when a ready version is gone", async () => {
+    loadMovieCandidates.mockResolvedValueOnce([readyFile]).mockResolvedValueOnce([english]);
+    getLink.mockResolvedValue(null);
+    requestMovie.mockResolvedValue({ ok: false, status: 404, reason: "candidate_gone" });
+    render(<DownloadButton movie={movie} />);
+    fireEvent.click(await screen.findByText("Herunterladen"));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Version nicht mehr verfügbar"));
+    expect(await screen.findByText("Nur Englisch")).toBeTruthy();
+  });
+
+  it("keeps a ready best version clickable while another version downloads", async () => {
+    const other = { ...ownFile, key: "file:22222222-2222-2222-2222-222222222222", nzbFileId: "2222" };
+    loadMovieCandidates.mockResolvedValue([readyFile, other]);
+    downloads.jobs = [job("2222", "downloading")];
+    render(<DownloadButton movie={movie} />);
+    const button = (await screen.findByText("Herunterladen")).closest("button");
+    expect(button?.disabled).toBe(false);
+  });
+
+  it("shows the cam warning when the server classifies the version as cam", async () => {
+    loadMovieCandidates.mockResolvedValue([candidate()]);
+    requestMovie.mockResolvedValue({ ok: false, status: 409, reason: "confirm_required", group: "cam" });
+    render(<DownloadButton movie={movie} />);
+    fireEvent.click(await screen.findByText("Verfügbar machen"));
+    expect(
+      await screen.findByText(
+        "Diese Version wurde im Kino abgefilmt. Bild und Ton sind schlecht. Trotzdem laden?",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("reloads the list and turns gold once the job completes", async () => {
+    loadMovieCandidates.mockResolvedValueOnce([ownFile]).mockResolvedValueOnce([readyFile]);
+    downloads.jobs = [job(ownFile.nzbFileId!, "downloading")];
+    const { rerender } = render(<DownloadButton movie={movie} />);
+    expect(await screen.findByText("downloading · 34%")).toBeTruthy();
+    downloads.jobs = [job(ownFile.nzbFileId!, "completed")];
+    rerender(<DownloadButton movie={movie} />);
+    expect(await screen.findByText("Herunterladen")).toBeTruthy();
+    expect(loadMovieCandidates).toHaveBeenCalledTimes(2);
   });
 });

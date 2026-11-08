@@ -285,7 +285,7 @@ export async function requestMovieDownload(body: MovieRequestBody, token: string
     status: "ready" | "downloading";
     nzbFileId: string;
     reason?: string;
-    group?: string;
+    group?: MovieCandidate["group"];
     error?: string;
   }>("/movies/requests", { method: "POST", body: JSON.stringify(body), token });
 }
