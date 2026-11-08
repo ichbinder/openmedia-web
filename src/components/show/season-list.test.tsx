@@ -10,8 +10,9 @@ vi.mock("@/lib/backend", () => ({
   getReleaseCandidates: vi.fn(),
 }));
 const mockGetStreamUrl = vi.hoisted(() => vi.fn());
+const mockRefresh = vi.hoisted(() => vi.fn());
 vi.mock("@/contexts/download-context", () => ({
-  useDownloads: () => ({ getStreamUrl: mockGetStreamUrl }),
+  useDownloads: () => ({ getStreamUrl: mockGetStreamUrl, refresh: mockRefresh }),
 }));
 vi.mock("@/components/movie/video-player", () => ({
   VideoPlayer: () => <div data-testid="player" />,
@@ -277,6 +278,7 @@ describe("SeasonList", () => {
       await within(row).findByText("Noch keine deutsche Fassung");
       expect(mockRequest).toHaveBeenCalledWith({ tmdbId: 7, season: 1, episode: 1 }, "tok");
       expect(within(row).queryByText("Anfordern")).toBeNull();
+      expect(mockRefresh).toHaveBeenCalled();
     });
 
     it("sends only one request on double click", async () => {

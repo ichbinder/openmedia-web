@@ -152,12 +152,17 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       // No status change — nothing to announce.
       if (prevStatus === job.status) continue;
 
-      const movieTitle = job.nzbFile?.movie?.titleDe || job.nzbFile?.movie?.titleEn || "Film";
+      const episode = job.nzbFile?.episode;
+      const movieTitle = episode
+        ? `${episode.show.titleDe || episode.show.titleEn} S${String(episode.season).padStart(2, "0")}E${String(episode.episode).padStart(2, "0")}`
+        : job.nzbFile?.movie?.titleDe || job.nzbFile?.movie?.titleEn || "Film";
       const fallbackName = job.nzbFile?.originalFilename?.replace(/\.nzb$/i, "") || "NZB";
 
       if (job.status === "completed" && prevStatus !== "completed") {
         toast.success(`${movieTitle} ist bereit`, {
-          description: "Du kannst den Film jetzt herunterladen.",
+          description: episode
+            ? "Du kannst die Folge jetzt abspielen."
+            : "Du kannst den Film jetzt herunterladen.",
           duration: 8_000,
         });
       } else if (job.status === "failed" && prevStatus !== "failed") {
