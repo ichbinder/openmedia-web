@@ -12,7 +12,7 @@ const COOKIE_NAME = "cinescope_token";
 async function proxyRequest(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
   const backendPath = path.join("/");
-  const url = `${BACKEND_URL}/${backendPath}`;
+  const url = `${BACKEND_URL}/${backendPath}${req.nextUrl.search}`;
 
   // Build headers — forward Content-Type, extract JWT from cookie
   const headers: Record<string, string> = {
