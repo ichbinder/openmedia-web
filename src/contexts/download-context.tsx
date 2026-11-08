@@ -85,7 +85,13 @@ interface DownloadContextValue {
   loadMovieCandidates: (tmdbId: number) => Promise<MovieCandidate[] | null>;
   requestMovie: (
     body: MovieRequestBody
-  ) => Promise<{ ok: boolean; status: number; reason?: string }>;
+  ) => Promise<{
+    ok: boolean;
+    status: number;
+    reason?: string;
+    outcome?: "ready" | "downloading";
+    nzbFileId?: string;
+  }>;
   /** Get presigned download URL for an NZB file (original) */
   getLink: (nzbFileId: string) => Promise<string | null>;
   /** Get presigned stream URL for an NZB file (browser-compatible MP4) */
@@ -419,7 +425,13 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
       const res = await requestMovieDownload(body, token);
       if (res.ok) await fetchJobs().catch(() => undefined);
-      return { ok: res.ok, status: res.status, reason: res.data?.reason };
+      return {
+        ok: res.ok,
+        status: res.status,
+        reason: res.data?.reason,
+        outcome: res.data?.status,
+        nzbFileId: res.data?.nzbFileId,
+      };
     },
     [fetchJobs]
   );

@@ -204,12 +204,6 @@ export function DownloadButton({
   const jobFor = (c: MovieCandidate) =>
     c.nzbFileId ? activeJobs.get(c.nzbFileId) : undefined;
 
-  async function download(c: MovieCandidate) {
-    if (!c.nzbFileId) return;
-    const url = await getLink(c.nzbFileId).catch(() => null);
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
-  }
-
   async function request(c: MovieCandidate, manual: boolean, confirmed = false) {
     if (c.group !== "german" && !confirmed) {
       setConfirming({ candidate: c, manual });
@@ -232,6 +226,10 @@ export function DownloadButton({
         return;
       }
       if (!res.ok) toast.error(REQUEST_ERRORS[res.reason ?? ""] ?? "Anfordern fehlgeschlagen");
+      if (res.outcome === "ready" && res.nzbFileId) {
+        const url = await getLink(res.nzbFileId).catch(() => null);
+        if (url) window.open(url, "_blank", "noopener,noreferrer");
+      }
       setCandidates(await fetchCandidates());
     } catch {
       toast.error("Anfordern fehlgeschlagen");
@@ -243,7 +241,6 @@ export function DownloadButton({
   function handleRowClick(c: MovieCandidate) {
     const job = jobFor(c);
     if (job) cancelJob(job.id);
-    else if (c.state === "ready") download(c);
     else request(c, true);
   }
 
@@ -262,9 +259,7 @@ export function DownloadButton({
     );
   }
 
-  const best = candidates.find((c) => c.state !== "broken");
-
-  if (isLoading || !best) {
+  if (isLoading || candidates.length === 0) {
     if (!isLoading && hideWhenUnavailable) return null;
     return (
       <button
@@ -284,9 +279,12 @@ export function DownloadButton({
     );
   }
 
+  const best = candidates.find((c) => c.state !== "broken");
   const activeJob = candidates.map(jobFor).find(Boolean);
-  const badge = warningBadge(best);
-  const tone = activeJob
+  const badge = best && warningBadge(best);
+  const tone = !best
+    ? "bg-muted text-muted-foreground"
+    : activeJob
     ? "bg-cinema-gold/20 text-cinema-gold"
     : best.state === "ready"
       ? "bg-cinema-gold text-black hover:bg-cinema-gold/90"
@@ -295,7 +293,14 @@ export function DownloadButton({
         : "bg-green-500/20 text-green-400 hover:bg-green-500/30";
 
   let main;
-  if (activeJob) {
+  if (!best) {
+    main = (
+      <>
+        <XCircle className="size-4" />
+        Keine Version gefunden
+      </>
+    );
+  } else if (activeJob) {
     main = (
       <>
         <Loader2 className="size-4 animate-spin" />
@@ -343,8 +348,8 @@ export function DownloadButton({
   return (
     <div className="flex">
       <button
-        onClick={() => (best.state === "ready" ? download(best) : request(best, false))}
-        disabled={busy || !!activeJob || (budgetHit && best.state !== "ready")}
+        onClick={() => best && request(best, false)}
+        disabled={!best || busy || !!activeJob || (budgetHit && best.state !== "ready")}
         className={cn(
           "flex items-center gap-2 rounded-l-md px-4 py-2 text-sm font-medium transition-colors",
           tone,
@@ -431,9 +436,16 @@ function CandidateItem({
           <CloudDownload className="size-3.5 shrink-0 text-green-400" />
         )}
         <div className="flex min-w-0 flex-col">
-          <span className={cn("text-sm font-medium", isBroken && "line-through text-muted-foreground")}>
-            {rowTitle(c)}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={cn("text-sm font-medium", isBroken && "line-through text-muted-foreground")}>
+              {rowTitle(c)}
+            </span>
+            {isReady && (
+              <span className="rounded bg-cinema-gold/20 px-1.5 py-0.5 text-xs text-cinema-gold">
+                Bereit
+              </span>
+            )}
+          </div>
           {isBroken ? (
             c.brokenReason && (
               <span className="max-w-[220px] truncate text-xs text-destructive">

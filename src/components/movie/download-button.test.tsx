@@ -3,9 +3,10 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import type { MovieCandidate } from "@/lib/backend";
 import { DownloadButton } from "./download-button";
 
-const { loadMovieCandidates, requestMovie, toastError } = vi.hoisted(() => ({
+const { loadMovieCandidates, requestMovie, getLink, toastError } = vi.hoisted(() => ({
   loadMovieCandidates: vi.fn(),
   requestMovie: vi.fn(),
+  getLink: vi.fn(),
   toastError: vi.fn(),
 }));
 
@@ -17,7 +18,7 @@ vi.mock("@/contexts/download-context", () => ({
   useDownloads: () => ({
     jobs: [],
     cancelJob: vi.fn(),
-    getLink: vi.fn(),
+    getLink,
     loadMovieCandidates,
     requestMovie,
   }),
@@ -81,6 +82,8 @@ const ownFile = candidate({
   germanSubtitles: false,
   hashPrefix: "a3f9c21e",
 });
+
+const readyFile = candidate({ ...ownFile, state: "ready", audioLanguages: ["de"] });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -231,10 +234,51 @@ describe("DownloadButton", () => {
     expect(loadMovieCandidates).toHaveBeenCalledTimes(2);
   });
 
-  it("shows gold 'Herunterladen' for a ready best candidate", async () => {
+  it("a ready click requests the version and then opens the link", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    loadMovieCandidates.mockResolvedValue([readyFile]);
+    requestMovie.mockResolvedValue({
+      ok: true,
+      status: 200,
+      outcome: "ready",
+      nzbFileId: ownFile.nzbFileId,
+    });
+    getLink.mockResolvedValue("https://s3.example/matrix.mkv");
+    render(<DownloadButton movie={movie} />);
+    fireEvent.click(await screen.findByText("Herunterladen"));
+    await waitFor(() =>
+      expect(open).toHaveBeenCalledWith(
+        "https://s3.example/matrix.mkv",
+        "_blank",
+        "noopener,noreferrer",
+      ),
+    );
+    expect(requestMovie).toHaveBeenCalledWith({ tmdbId: 603, key: ownFile.key });
+    expect(getLink).toHaveBeenCalledWith(ownFile.nzbFileId);
+    open.mockRestore();
+  });
+
+  it("shows 'Bereit' on a ready row", async () => {
+    loadMovieCandidates.mockResolvedValue([readyFile]);
+    render(<DownloadButton movie={movie} />);
+    await openList();
+    expect(await screen.findByText("Bereit")).toBeTruthy();
+    expect(screen.getByText("Download")).toBeTruthy();
+  });
+
+  it("keeps the list with the Fehlerhaft group when every version is broken", async () => {
     loadMovieCandidates.mockResolvedValue([
-      candidate({ ...ownFile, state: "ready", audioLanguages: ["de"] }),
+      candidate({ ...ownFile, state: "broken", brokenReason: "Archiv unvollständig" }),
     ]);
+    render(<DownloadButton movie={movie} hideWhenUnavailable />);
+    expect(await screen.findByText("Keine Version gefunden")).toBeTruthy();
+    await openList();
+    expect(await screen.findByText("Fehlerhaft")).toBeTruthy();
+    expect(screen.getByText("Archiv unvollständig")).toBeTruthy();
+  });
+
+  it("shows gold 'Herunterladen' for a ready best candidate", async () => {
+    loadMovieCandidates.mockResolvedValue([readyFile]);
     render(<DownloadButton movie={movie} />);
     const button = (await screen.findByText("Herunterladen")).closest("button");
     expect(button?.className).toContain("bg-cinema-gold");
