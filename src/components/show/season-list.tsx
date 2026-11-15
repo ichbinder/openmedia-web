@@ -10,6 +10,7 @@ import {
   requestEpisodes,
   type EpisodeRequestView,
   type NzbShowInfo,
+  type Resume,
 } from "@/lib/backend";
 import type { EpisodeSummary, SeasonSummary } from "@/lib/tmdb";
 import { qualityRank } from "@/lib/utils";
@@ -85,7 +86,7 @@ const requestButtonClass =
   "flex items-center gap-1.5 rounded-md bg-cinema-gold/20 px-3 py-1.5 text-sm font-medium text-cinema-gold transition-colors hover:bg-cinema-gold/30 disabled:opacity-50";
 
 export function SeasonList({ showId, seasons }: SeasonListProps) {
-  const { getStreamUrl, refresh } = useDownloads();
+  const { getStream, refresh } = useDownloads();
   const [versions, setVersions] = useState<Map<string, Version[]>>(new Map());
   const [requests, setRequests] = useState<Map<string, EpisodeRequestView>>(
     new Map(),
@@ -96,9 +97,12 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [picked, setPicked] = useState<Map<string, string>>(new Map());
-  const [playing, setPlaying] = useState<{ code: string; url: string } | null>(
-    null,
-  );
+  const [playing, setPlaying] = useState<{
+    code: string;
+    url: string;
+    nzbFileId: string;
+    resume: Resume | null;
+  } | null>(null);
 
   const playRequest = useRef(0);
   const autoPlayed = useRef(false);
@@ -153,9 +157,9 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
     const request = ++playRequest.current;
     setBusyId(fileId);
     try {
-      const url = await getStreamUrl(fileId);
+      const result = await getStream(fileId);
       if (request !== playRequest.current) return;
-      if (url) setPlaying({ code, url });
+      if (result) setPlaying({ code, nzbFileId: fileId, ...result });
       else toast.error("Stream konnte nicht gestartet werden");
     } catch {
       if (request === playRequest.current) toast.error("Stream fehlgeschlagen");
@@ -442,6 +446,8 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                           <div className="mt-3">
                             <VideoPlayer
                               src={playing.url}
+                              nzbFileId={playing.nzbFileId}
+                              resume={playing.resume}
                               title={`${code} · ${episode.name}`}
                               onClose={() => setPlaying(null)}
                               autoPlay

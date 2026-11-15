@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
 import { useDownloads } from "@/contexts/download-context";
 import { VideoPlayer } from "@/components/movie/video-player";
+import type { Resume } from "@/lib/backend";
 import type { MovieDetail } from "@/lib/tmdb";
 import { getBackdropUrl } from "@/lib/tmdb";
 import { qualityRank } from "@/lib/utils";
@@ -21,19 +22,23 @@ export function MovieHeroWithPlayer({
   children,
 }: MovieHeroWithPlayerProps) {
   const { user } = useAuth();
-  const { checkAvailability, getStreamUrl } = useDownloads();
+  const { checkAvailability, getStream } = useDownloads();
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [stream, setStream] = useState<{
+    url: string;
+    resume: Resume | null;
+    nzbFileId: string;
+  } | null>(null);
   const [isLoadingStream, setIsLoadingStream] = useState(false);
 
   const startStream = useCallback(
     async (fileId: string) => {
       setIsLoadingStream(true);
       try {
-        const url = await getStreamUrl(fileId);
-        if (url) {
-          setStreamUrl(url);
+        const result = await getStream(fileId);
+        if (result) {
+          setStream({ ...result, nzbFileId: fileId });
           setIsPlaying(true);
         } else {
           toast.error("Stream konnte nicht gestartet werden", {
@@ -49,7 +54,7 @@ export function MovieHeroWithPlayer({
         setIsLoadingStream(false);
       }
     },
-    [getStreamUrl],
+    [getStream],
   );
 
   // Track the best available file (with s3StreamKey) for this movie
@@ -104,18 +109,20 @@ export function MovieHeroWithPlayer({
 
   const handleClose = useCallback(() => {
     setIsPlaying(false);
-    setStreamUrl(null);
+    setStream(null);
   }, []);
 
   const backdropUrl = getBackdropUrl(movie.backdrop_path, "w1280");
 
   // Player is active — render Vidstack instead of backdrop
-  if (isPlaying && streamUrl) {
+  if (isPlaying && stream) {
     return (
       <section className="relative w-full">
         <div className="relative w-full md:mx-auto md:max-w-6xl md:px-6 lg:px-8">
           <VideoPlayer
-            src={streamUrl}
+            src={stream.url}
+            nzbFileId={stream.nzbFileId}
+            resume={stream.resume}
             title={movie.title}
             posterUrl={backdropUrl ?? undefined}
             onClose={handleClose}

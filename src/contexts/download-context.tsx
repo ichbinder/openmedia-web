@@ -25,6 +25,7 @@ import {
   getStreamLink as getStreamLinkApi,
   getMovieCandidates,
   requestMovieDownload,
+  type Resume,
 } from "@/lib/backend";
 
 // ── Constants ────────────────────────────────────────────────
@@ -96,7 +97,9 @@ interface DownloadContextValue {
   /** Get presigned download URL for an NZB file (original) */
   getLink: (nzbFileId: string) => Promise<string | null>;
   /** Get presigned stream URL for an NZB file (browser-compatible MP4) */
-  getStreamUrl: (nzbFileId: string) => Promise<string | null>;
+  getStream: (
+    nzbFileId: string,
+  ) => Promise<{ url: string; resume: Resume | null } | null>;
   /** Number of active (non-terminal) jobs — includes needs_review */
   activeCount: number;
   /** Number of jobs waiting for manual TMDB assignment (M021) */
@@ -454,14 +457,16 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   );
 
   // ── Get presigned stream link (browser-compatible MP4) ───
-  const getStreamUrl = useCallback(
-    async (nzbFileId: string): Promise<string | null> => {
+  const getStream = useCallback(
+    async (
+      nzbFileId: string,
+    ): Promise<{ url: string; resume: Resume | null } | null> => {
       const token = getToken();
       if (!token) return null;
 
       const res = await getStreamLinkApi(nzbFileId, token);
       if (res.ok && res.data?.url) {
-        return res.data.url;
+        return { url: res.data.url, resume: res.data.resume ?? null };
       }
       return null;
     },
@@ -487,7 +492,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         loadMovieCandidates,
         requestMovie,
         getLink,
-        getStreamUrl,
+        getStream,
         activeCount,
         needsReviewCount,
         completedJobs,

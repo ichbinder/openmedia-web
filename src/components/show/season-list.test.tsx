@@ -9,10 +9,10 @@ vi.mock("@/lib/backend", () => ({
   requestEpisodes: vi.fn(),
   getReleaseCandidates: vi.fn(),
 }));
-const mockGetStreamUrl = vi.hoisted(() => vi.fn());
+const mockGetStream = vi.hoisted(() => vi.fn());
 const mockRefresh = vi.hoisted(() => vi.fn());
 vi.mock("@/contexts/download-context", () => ({
-  useDownloads: () => ({ getStreamUrl: mockGetStreamUrl, refresh: mockRefresh }),
+  useDownloads: () => ({ getStream: mockGetStream, refresh: mockRefresh }),
 }));
 vi.mock("@/components/movie/video-player", () => ({
   VideoPlayer: () => <div data-testid="player" />,
@@ -65,7 +65,7 @@ const seasons = [
 
 beforeEach(() => {
   mockGetShow.mockReset();
-  mockGetStreamUrl.mockReset();
+  mockGetStream.mockReset();
   mockDownload.mockReset();
   mockRequest.mockReset();
   window.location.hash = "";
@@ -158,7 +158,7 @@ describe("SeasonList", () => {
       ]),
     );
     mockDownload.mockResolvedValue({ ok: true, status: 200, data: { url: "u" } } as never);
-    mockGetStreamUrl.mockResolvedValue("http://stream");
+    mockGetStream.mockResolvedValue({ url: "http://stream", resume: null });
     vi.spyOn(window, "open").mockImplementation(() => null);
     render(<SeasonList showId={1} seasons={seasons} />);
     const row = document.getElementById("S01E01")!;
@@ -167,7 +167,7 @@ describe("SeasonList", () => {
     fireEvent.click(within(row).getByText("Laden"));
     await waitFor(() => expect(mockDownload).toHaveBeenCalledWith("c", "tok"));
     fireEvent.click(within(row).getByText("Abspielen"));
-    await waitFor(() => expect(mockGetStreamUrl).toHaveBeenCalledWith("b"));
+    await waitFor(() => expect(mockGetStream).toHaveBeenCalledWith("b"));
   });
 
   it("prefers the larger of two versions and plays the one picked in the list", async () => {
@@ -185,7 +185,7 @@ describe("SeasonList", () => {
     mockGetShow.mockResolvedValue(
       showWith([version("sample", "47385232", 63, "SAUERKRAUT"), version("full", "2909735046", 3240, "ZeroTwo")]),
     );
-    mockGetStreamUrl.mockResolvedValue("http://stream");
+    mockGetStream.mockResolvedValue({ url: "http://stream", resume: null });
     render(<SeasonList showId={1} seasons={seasons} />);
     const row = document.getElementById("S01E01")!;
     const select = (await within(row).findByLabelText("Version für S01E01")) as HTMLSelectElement;
@@ -193,10 +193,10 @@ describe("SeasonList", () => {
     expect(within(row).getByText("1080p · 2,9 GB · 54 Min · ZeroTwo")).toBeTruthy();
     expect(within(row).getByText("1080p · 47 MB · 1 Min · SAUERKRAUT")).toBeTruthy();
     fireEvent.click(within(row).getByText("Abspielen"));
-    await waitFor(() => expect(mockGetStreamUrl).toHaveBeenCalledWith("full"));
+    await waitFor(() => expect(mockGetStream).toHaveBeenCalledWith("full"));
     fireEvent.change(select, { target: { value: "sample" } });
     fireEvent.click(within(row).getByText("Abspielen"));
-    await waitFor(() => expect(mockGetStreamUrl).toHaveBeenLastCalledWith("sample"));
+    await waitFor(() => expect(mockGetStream).toHaveBeenLastCalledWith("sample"));
   });
 
   it("keeps broken versions out of the list and numbers equal labels", async () => {
@@ -231,25 +231,25 @@ describe("SeasonList", () => {
         { id: "small", qualityTier: "720p", resolution: null, s3Key: "k", s3StreamKey: "s", status: "untested", fileSize: "1000000000" },
       ]),
     );
-    mockGetStreamUrl.mockResolvedValue("http://stream");
+    mockGetStream.mockResolvedValue({ url: "http://stream", resume: null });
     render(<SeasonList showId={1} seasons={seasons} />);
     const row = document.getElementById("S01E01")!;
     const select = (await within(row).findByLabelText("Version für S01E01")) as HTMLSelectElement;
     fireEvent.change(select, { target: { value: "big" } });
     fireEvent.click(within(row).getByText("Andere Version abspielen"));
-    await waitFor(() => expect(mockGetStreamUrl).toHaveBeenCalledWith("small"));
+    await waitFor(() => expect(mockGetStream).toHaveBeenCalledWith("small"));
   });
 
   it("plays and renders the player when Abspielen is clicked", async () => {
     mockGetShow.mockResolvedValue(
       showWith([{ id: "f", qualityTier: "1080p", resolution: null, s3Key: "k", s3StreamKey: "s" }]),
     );
-    mockGetStreamUrl.mockResolvedValue("http://stream");
+    mockGetStream.mockResolvedValue({ url: "http://stream", resume: null });
     render(<SeasonList showId={1} seasons={seasons} />);
     const row = document.getElementById("S01E01")!;
     fireEvent.click(await within(row).findByText("Abspielen"));
     expect(await within(row).findByTestId("player")).toBeTruthy();
-    expect(mockGetStreamUrl).toHaveBeenCalledWith("f");
+    expect(mockGetStream).toHaveBeenCalledWith("f");
   });
 
   it("autoplays once when the URL hash matches an episode with a stream", async () => {
@@ -257,11 +257,11 @@ describe("SeasonList", () => {
     mockGetShow.mockResolvedValue(
       showWith([{ id: "f", qualityTier: "1080p", resolution: null, s3Key: "k", s3StreamKey: "s" }]),
     );
-    mockGetStreamUrl.mockResolvedValue("http://stream");
+    mockGetStream.mockResolvedValue({ url: "http://stream", resume: null });
     render(<SeasonList showId={1} seasons={seasons} />);
-    await waitFor(() => expect(mockGetStreamUrl).toHaveBeenCalledWith("f"));
+    await waitFor(() => expect(mockGetStream).toHaveBeenCalledWith("f"));
     await screen.findByTestId("player");
-    expect(mockGetStreamUrl).toHaveBeenCalledTimes(1);
+    expect(mockGetStream).toHaveBeenCalledTimes(1);
   });
 
   it("shows a note for a season that failed to load", () => {

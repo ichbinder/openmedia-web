@@ -292,10 +292,17 @@ export async function requestMovieDownload(body: MovieRequestBody, token: string
 
 // ── Download Links ───────────────────────────────────────────
 
+export interface Resume {
+  positionSec: number;
+  durationSec: number;
+  finished: boolean;
+}
+
 export interface DownloadLink {
   url: string;
   expiresIn: number;
   expiresAt: string;
+  resume: Resume | null;
 }
 
 export async function getDownloadLink(nzbFileId: string, token: string, expires = "7d") {
@@ -304,6 +311,63 @@ export async function getDownloadLink(nzbFileId: string, token: string, expires 
 
 export async function getStreamLink(nzbFileId: string, token: string, expires = "7d") {
   return backendFetch<DownloadLink>(`/nzb/files/${nzbFileId}/stream-link?expires=${expires}`, { token });
+}
+
+// ── Watch Progress ───────────────────────────────────────────
+
+interface RequestState {
+  status: string;
+  waitReason: string | null;
+}
+
+export interface ContinueItem {
+  kind: "movie" | "episode";
+  tmdbId: number;
+  title: string;
+  posterPath: string | null;
+  season: number | null;
+  episode: number | null;
+  episodeTitle: string | null;
+  positionSec: number;
+  durationSec: number;
+  updatedAt: string;
+  nzbFileId: string | null;
+  request: RequestState | null;
+}
+
+export interface NextEpisode {
+  showTmdbId: number;
+  season: number;
+  episode: number;
+  titleDe: string | null;
+  nzbFileId: string | null;
+  request: RequestState | null;
+}
+
+export function reportProgress(
+  body: { nzbFileId: string; positionSec: number; durationSec: number },
+  token: string,
+) {
+  return backendFetch<{ progress: Resume }>("/progress", {
+    method: "PUT",
+    body: JSON.stringify(body),
+    token,
+  });
+}
+
+export function getContinueWatching(token: string) {
+  return backendFetch<{ items: ContinueItem[] }>("/progress/continue", { token });
+}
+
+export function getNextEpisode(nzbFileId: string, token: string) {
+  return backendFetch<{ next: NextEpisode | null }>(`/progress/next/${nzbFileId}`, { token });
+}
+
+export function hideContinue(kind: "movie" | "show", tmdbId: number, token: string) {
+  return backendFetch<{ hidden: number }>(`/progress/${kind}/${tmdbId}`, {
+    method: "DELETE",
+    token,
+  });
 }
 
 // ── Library ──────────────────────────────────────────────────

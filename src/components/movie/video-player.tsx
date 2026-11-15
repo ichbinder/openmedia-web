@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useMemo, useState } from "react";
 import {
   MediaPlayer,
   MediaProvider,
@@ -13,6 +13,12 @@ import {
   defaultLayoutIcons,
 } from "@vidstack/react/player/layouts/default";
 import { X } from "lucide-react";
+
+import { ResumePrompt } from "@/components/player/resume-prompt";
+import { getToken } from "@/lib/auth";
+import { reportProgress, type Resume } from "@/lib/backend";
+import { shouldAskResume } from "@/lib/progress";
+import { createProgressReporter, type ProgressBody } from "@/lib/progress-reporter";
 
 import "@vidstack/react/player/styles/default/theme.css";
 import "@vidstack/react/player/styles/default/layouts/video.css";
@@ -41,6 +47,24 @@ interface VideoPlayerProps {
   onClose: () => void;
   /** Auto-play on mount */
   autoPlay?: boolean;
+  /** File the playback position is reported for */
+  nzbFileId: string;
+  /** Saved position; triggers the resume prompt when worth asking */
+  resume?: Resume | null;
+  /** Start position in seconds without asking */
+  startAt?: number;
+}
+
+function sendProgress(body: ProgressBody, beacon: boolean) {
+  if (beacon) {
+    navigator.sendBeacon(
+      "/api/backend/progress",
+      new Blob([JSON.stringify(body)], { type: "application/json" }),
+    );
+    return;
+  }
+  const token = getToken();
+  if (token) reportProgress(body, token).catch(() => {});
 }
 
 export function VideoPlayer({
@@ -49,8 +73,52 @@ export function VideoPlayer({
   posterUrl,
   onClose,
   autoPlay = false,
+  nzbFileId,
+  resume = null,
+  startAt,
 }: VideoPlayerProps) {
   const playerRef = useRef<MediaPlayerInstance>(null);
+  const [asking, setAsking] = useState(
+    () => startAt === undefined && shouldAskResume(resume),
+  );
+  const reporter = useMemo(
+    () => createProgressReporter(sendProgress, nzbFileId),
+    [nzbFileId],
+  );
+
+  useEffect(() => {
+    const flushBeacon = () => reporter.flush(true);
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushBeacon();
+    };
+    window.addEventListener("pagehide", flushBeacon);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flushBeacon);
+      document.removeEventListener("visibilitychange", onVisibility);
+      reporter.flush(true);
+      reporter.dispose();
+    };
+  }, [reporter]);
+
+  const startAtApplied = useRef(false);
+  function handleCanPlay() {
+    if (startAt === undefined || startAtApplied.current || !playerRef.current) return;
+    startAtApplied.current = true;
+    playerRef.current.currentTime = startAt;
+  }
+
+  function currentDuration() {
+    return playerRef.current?.state.duration ?? NaN;
+  }
+
+  function startPlayback(from?: number) {
+    const player = playerRef.current;
+    setAsking(false);
+    if (!player) return;
+    if (from !== undefined) player.currentTime = from;
+    void player.play();
+  }
 
   // Close on ESC key
   const handleKeyDown = useCallback(
@@ -99,7 +167,14 @@ export function VideoPlayer({
         ref={playerRef}
         src={{ src, type: getMimeType(src) }}
         title={title}
-        autoPlay={autoPlay}
+        autoPlay={autoPlay && !asking}
+        onCanPlay={handleCanPlay}
+        onTimeUpdate={({ currentTime }) =>
+          reporter.tick(currentTime, currentDuration(), !playerRef.current?.state.paused)
+        }
+        onPause={() => reporter.pause(playerRef.current?.currentTime ?? 0, currentDuration())}
+        onSeeked={(currentTime) => reporter.seeked(currentTime, currentDuration())}
+        onEnded={() => reporter.ended(playerRef.current?.currentTime ?? 0, currentDuration())}
         playsInline
         crossOrigin=""
         onError={handleError}
@@ -120,6 +195,13 @@ export function VideoPlayer({
           // Disable download button in the player — user has the existing download button
           download={false}
         />
+        {asking && resume && (
+          <ResumePrompt
+            positionSec={resume.positionSec}
+            onResume={() => startPlayback(resume.positionSec)}
+            onRestart={() => startPlayback()}
+          />
+        )}
       </MediaPlayer>
     </div>
   );
