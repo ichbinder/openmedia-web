@@ -20,6 +20,24 @@ import { getToken } from "@/lib/auth";
 import { dismissSuggestion, type SuggestionItem } from "@/lib/backend";
 import { getPosterUrl, type Movie } from "@/lib/tmdb";
 
+function toMovie(item: SuggestionItem): Movie {
+  return {
+    id: item.tmdbId,
+    title: item.name,
+    original_title: item.name,
+    overview: "",
+    poster_path: item.posterPath,
+    backdrop_path: null,
+    vote_average: 0,
+    vote_count: 0,
+    release_date: item.year ? `${item.year}-01-01` : "",
+    genre_ids: [],
+    popularity: 0,
+    adult: false,
+    media_type: "movie",
+  };
+}
+
 interface SuggestionTileProps {
   item: SuggestionItem;
   onGone: () => void;
@@ -51,9 +69,7 @@ export function SuggestionTile({ item, onGone }: SuggestionTileProps) {
           isShow ? (
             <ShowPreviewActions showId={item.tmdbId} data={data} />
           ) : (
-            <MoviePreviewActions
-              movie={{ id: item.tmdbId, title: item.name, poster_path: item.posterPath } as Movie}
-            />
+            <MoviePreviewActions movie={toMovie(item)} />
           )
         }
       >

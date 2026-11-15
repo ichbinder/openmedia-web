@@ -5,6 +5,22 @@ import type { SuggestionItem } from "@/lib/backend";
 vi.mock("@/lib/auth", () => ({ getToken: () => "tok" }));
 vi.mock("@/hooks/use-title-meta", () => ({ useTitleMeta: () => null }));
 vi.mock("@/hooks/use-persons", () => ({ usePersons: () => [] }));
+const movieActions = vi.hoisted(() => vi.fn());
+vi.mock("@/components/preview/preview-tile", () => ({
+  PreviewTile: ({ children, actions }: { children: React.ReactNode; actions: (d: null) => React.ReactNode }) => (
+    <div>
+      {children}
+      {actions(null)}
+    </div>
+  ),
+}));
+vi.mock("@/components/preview/movie-preview-actions", () => ({
+  MoviePreviewActions: (props: unknown) => {
+    movieActions(props);
+    return null;
+  },
+}));
+vi.mock("@/components/preview/show-preview-actions", () => ({ ShowPreviewActions: () => null }));
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
 }));
@@ -27,6 +43,13 @@ async function openMenu() {
 beforeEach(() => vi.mocked(dismissSuggestion).mockReset());
 
 describe("SuggestionTile", () => {
+  it("hands the watchlist a movie carrying the year", () => {
+    render(<SuggestionTile item={movie} onGone={vi.fn()} />);
+    expect(movieActions).toHaveBeenCalledWith({
+      movie: expect.objectContaining({ id: 7, title: "Heat", release_date: "1995-01-01", poster_path: "/p.jpg" }),
+    });
+  });
+
   it("shows title, year, reason and links movies and shows to their detail pages", () => {
     const { rerender } = render(<SuggestionTile item={movie} onGone={vi.fn()} />);
     expect(screen.getByText("Heat")).toBeInTheDocument();
