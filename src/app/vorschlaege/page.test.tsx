@@ -12,6 +12,7 @@ vi.mock("@/components/suggestions/suggestion-row", () => ({
     </section>
   ),
 }));
+vi.mock("@/components/auth/protected-route", () => ({ ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
 }));
@@ -74,5 +75,17 @@ describe("VorschlaegePage", () => {
     unmount();
     await vi.advanceTimersByTimeAsync(30_000);
     expect(getSuggestions).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["ready", "none"] as const)("status %s without rows and no run shows the empty hint and does not poll", async (status) => {
+    respond({ status, running: false, createdAt: null, rows: [] });
+    await renderPage();
+    expect(screen.queryByText("Die ersten Vorschläge werden erstellt …")).toBeNull();
+    expect(screen.getByText(/Gerade keine Vorschläge/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Im Profil kannst du sie neu erstellen/ })).toHaveAttribute("href", "/profile");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(getSuggestions).toHaveBeenCalledTimes(1);
   });
 });

@@ -32,6 +32,13 @@ describe("AiSettingsSection", () => {
     expect(input).toHaveAttribute("type", "password");
   });
 
+  it("ohne gespeichertes Modell ist das Modellfeld vorbelegt", async () => {
+    settings();
+    render(<AiSettingsSection />);
+    await screen.findByLabelText("OpenRouter-Key");
+    expect(screen.getByDisplayValue("moonshotai/kimi-k3")).toBeTruthy();
+  });
+
   it("mit Key steht Key gespeichert da und kein Key im DOM", async () => {
     settings({ model: "moonshotai/kimi-k3", hasKey: true });
     const { container } = render(<AiSettingsSection />);

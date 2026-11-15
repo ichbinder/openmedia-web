@@ -40,7 +40,7 @@ export function AiSettingsSection() {
       return;
     }
     setSettings(res.data);
-    setModel(res.data.model);
+    setModel(res.data.model || MODEL_PLACEHOLDER);
   }, []);
 
   useEffect(() => {
