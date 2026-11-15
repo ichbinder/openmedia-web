@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { NextEpisode } from "@/lib/backend";
 import { PROGRESS, type NextPhase } from "@/lib/progress";
 
 interface NextEpisodeOverlayProps {
   phase: NextPhase;
   next: NextEpisode;
-  onPlayNext: () => void;
+  onPlayNext: () => Promise<boolean> | void;
   onCancel: () => void;
-  onDownload: () => void;
+  onDownload: () => Promise<boolean> | void;
 }
 
 const primaryClass =
@@ -22,19 +22,24 @@ function requestNote(request: NonNullable<NextEpisode["request"]>) {
 function Countdown({
   onPlayNext,
   onCancel,
-}: Pick<NextEpisodeOverlayProps, "onPlayNext" | "onCancel">) {
+}: { onPlayNext: () => void; onCancel: () => void }) {
   const [left, setLeft] = useState<number>(PROGRESS.COUNTDOWN_SEC);
   const [cancelled, setCancelled] = useState(false);
+  const latestPlayNext = useRef(onPlayNext);
+
+  useEffect(() => {
+    latestPlayNext.current = onPlayNext;
+  });
 
   useEffect(() => {
     if (cancelled) return;
     if (left <= 0) {
-      onPlayNext();
+      latestPlayNext.current();
       return;
     }
     const timer = setTimeout(() => setLeft(left - 1), 1000);
     return () => clearTimeout(timer);
-  }, [left, cancelled, onPlayNext]);
+  }, [left, cancelled]);
 
   if (cancelled) return null;
   return (
@@ -66,13 +71,33 @@ export function NextEpisodeOverlay({
   onDownload,
 }: NextEpisodeOverlayProps) {
   const [requested, setRequested] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
+  const [playFailed, setPlayFailed] = useState(false);
   if (phase === "hidden") return null;
+
+  async function playNext() {
+    if ((await onPlayNext()) === false) setPlayFailed(true);
+  }
+
+  async function download() {
+    setDownloadFailed(false);
+    if ((await onDownload()) === false) {
+      setDownloadFailed(true);
+      return;
+    }
+    setRequested(true);
+  }
 
   return (
     <div className="absolute bottom-20 right-4 z-40 flex flex-col items-end gap-2 rounded-lg bg-black/70 p-3 text-white">
-      {phase === "countdown" && <Countdown onPlayNext={onPlayNext} onCancel={onCancel} />}
-      {phase === "button" && (
-        <button onClick={onPlayNext} className={primaryClass}>
+      {playFailed && phase !== "download" && (
+        <p className="text-sm">Nächste Folge konnte nicht gestartet werden</p>
+      )}
+      {phase === "countdown" && !playFailed && (
+        <Countdown onPlayNext={playNext} onCancel={onCancel} />
+      )}
+      {(phase === "button" || (phase === "countdown" && playFailed)) && (
+        <button onClick={playNext} className={primaryClass}>
           Nächste Folge ▶
         </button>
       )}
@@ -80,15 +105,12 @@ export function NextEpisodeOverlay({
         (next.request || requested ? (
           <p className="text-sm">{next.request ? requestNote(next.request) : "Wird gesucht…"}</p>
         ) : (
-          <button
-            onClick={() => {
-              setRequested(true);
-              onDownload();
-            }}
-            className={primaryClass}
-          >
-            Nächste Folge herunterladen
-          </button>
+          <>
+            {downloadFailed && <p className="text-sm">Anfrage fehlgeschlagen</p>}
+            <button onClick={download} className={primaryClass}>
+              Nächste Folge herunterladen
+            </button>
+          </>
         ))}
     </div>
   );

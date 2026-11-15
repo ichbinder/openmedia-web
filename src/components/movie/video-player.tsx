@@ -136,12 +136,19 @@ export function VideoPlayer({
   }, [nzbFileId]);
 
   const switching = useRef(false);
-  async function playNext() {
-    if (!next?.nzbFileId || switching.current) return;
+  async function playNext(): Promise<boolean> {
+    if (!next?.nzbFileId) return false;
+    if (switching.current) return true;
     switching.current = true;
-    const stream = await getStream(next.nzbFileId);
-    switching.current = false;
-    if (!stream) return;
+    let stream;
+    try {
+      stream = await getStream(next.nzbFileId);
+    } catch {
+      stream = null;
+    } finally {
+      switching.current = false;
+    }
+    if (!stream) return false;
     pendingSeek.current = undefined;
     setNext(null);
     setRemainingSec(Infinity);
@@ -153,15 +160,21 @@ export function VideoPlayer({
       src: stream.url,
       title: `S${next.season} · F${next.episode}${next.titleDe ? ` · ${next.titleDe}` : ""}`,
     });
+    return true;
   }
 
-  function downloadNext() {
+  async function downloadNext(): Promise<boolean> {
     const token = getToken();
-    if (!token || !next) return;
-    requestEpisodes(
-      { tmdbId: next.showTmdbId, season: next.season, episode: next.episode },
-      token,
-    ).catch(() => {});
+    if (!token || !next) return false;
+    try {
+      const res = await requestEpisodes(
+        { tmdbId: next.showTmdbId, season: next.season, episode: next.episode },
+        token,
+      );
+      return res.ok;
+    } catch {
+      return false;
+    }
   }
 
   const pendingSeek = useRef<number | undefined>(startAt);
@@ -238,6 +251,8 @@ export function VideoPlayer({
           reporter.tick(currentTime, currentDuration(), !playerRef.current?.state.paused);
           setRemainingSec(Math.floor(currentDuration() - currentTime));
         }}
+        onPlay={() => setEnded(false)}
+        onSeeking={() => setEnded(false)}
         onPause={() => reporter.pause(playerRef.current?.currentTime ?? 0, currentDuration())}
         onSeeked={(currentTime) => reporter.seeked(currentTime, currentDuration())}
         onEnded={() => {
