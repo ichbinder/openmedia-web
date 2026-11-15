@@ -362,8 +362,15 @@ export function getContinueWatching(token: string) {
   return backendFetch<{ items: ContinueItem[] }>("/progress/continue", { token });
 }
 
+export interface PlaybackInfo {
+  next: NextEpisode | null;
+  seasonFinale: boolean;
+  title: RatingTitle | null;
+  rating: RatingView | null;
+}
+
 export function getNextEpisode(nzbFileId: string, token: string) {
-  return backendFetch<{ next: NextEpisode | null }>(`/progress/next/${nzbFileId}`, { token });
+  return backendFetch<PlaybackInfo>(`/progress/next/${nzbFileId}`, { token });
 }
 
 export function hideContinue(kind: "movie" | "show", tmdbId: number, token: string) {
@@ -488,4 +495,100 @@ export function getTitleMeta(items: { kind: "movie" | "show"; tmdbId: number }[]
     body: JSON.stringify({ items }),
     token,
   });
+}
+
+// ── Ratings & Taste ──────────────────────────────────────────
+
+export type Verdict = "up" | "meh" | "down";
+
+export interface RatingTitle {
+  kind: "movie" | "show";
+  tmdbId: number;
+  name: string;
+}
+
+export interface RatingView {
+  kind: "movie" | "show";
+  tmdbId: number;
+  verdict: Verdict | null;
+  tags: string[];
+  forWhom: string | null;
+  source: "app" | "quiz" | "trakt";
+  ratedAt: string;
+}
+
+export interface Person {
+  id: string;
+  name: string;
+  limits: string[];
+  limitsText: string;
+}
+
+export interface TasteView {
+  exists: boolean;
+  persons: Person[];
+  genres: string[];
+  likesText: string;
+  traktImportedAt: string | null;
+  traktImportCounts: { rated: number; seen: number; skipped: number } | null;
+}
+
+export interface TasteBody {
+  persons: { id?: string; name: string; limits: string[]; limitsText: string }[];
+  genres: string[];
+  likesText: string;
+}
+
+export interface TraktCounts {
+  rated: number;
+  seen: number;
+  skipped: number;
+}
+
+export type TraktPollResult =
+  | { status: "pending" | "expired" | "denied" }
+  | { status: "done"; counts: TraktCounts };
+
+export function getRatings(token: string) {
+  return backendFetch<{ items: RatingView[] }>("/ratings", { token });
+}
+
+export function getRating(kind: "movie" | "show", tmdbId: number, token: string) {
+  return backendFetch<RatingView>(`/ratings/${kind}/${tmdbId}`, { token });
+}
+
+export function putRating(
+  kind: "movie" | "show",
+  tmdbId: number,
+  body: { verdict: Verdict; tags?: string[]; forWhom?: string | null; source?: "app" | "quiz" },
+  token: string,
+) {
+  return backendFetch<RatingView>(`/ratings/${kind}/${tmdbId}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+    token,
+  });
+}
+
+export function deleteRating(kind: "movie" | "show", tmdbId: number, token: string) {
+  return backendFetch<null>(`/ratings/${kind}/${tmdbId}`, { method: "DELETE", token });
+}
+
+export function getTaste(token: string) {
+  return backendFetch<TasteView>("/taste", { token });
+}
+
+export function putTaste(body: TasteBody, token: string) {
+  return backendFetch<TasteView>("/taste", { method: "PUT", body: JSON.stringify(body), token });
+}
+
+export function traktConnect(token: string) {
+  return backendFetch<{ userCode: string; verificationUrl: string; expiresIn: number; interval: number }>(
+    "/trakt/connect",
+    { method: "POST", token },
+  );
+}
+
+export function traktPoll(token: string) {
+  return backendFetch<TraktPollResult>("/trakt/poll", { method: "POST", token });
 }
