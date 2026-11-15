@@ -14,8 +14,15 @@ export interface PersonDraft {
   name: string;
 }
 
-function draftsOf(persons: Person[]): PersonDraft[] {
-  return persons.length > 0 ? persons.map(({ id, name }) => ({ id, name })) : [{ name: "" }];
+interface Row extends PersonDraft {
+  key: string;
+}
+
+let rowCounter = 0;
+const newRow = (draft: PersonDraft = { name: "" }): Row => ({ ...draft, key: `row-${rowCounter++}` });
+
+function draftsOf(persons: Person[]): Row[] {
+  return persons.length > 0 ? persons.map(({ id, name }) => newRow({ id, name })) : [newRow()];
 }
 
 interface PersonsStepProps {
@@ -24,7 +31,7 @@ interface PersonsStepProps {
 }
 
 export function PersonsStep({ persons, onSave }: PersonsStepProps) {
-  const [rows, setRows] = useState<PersonDraft[]>(() => draftsOf(persons));
+  const [rows, setRows] = useState<Row[]>(() => draftsOf(persons));
   const [seen, setSeen] = useState(persons);
   if (seen !== persons) {
     setSeen(persons);
@@ -39,7 +46,7 @@ export function PersonsStep({ persons, onSave }: PersonsStepProps) {
 
   async function save() {
     const drafts = rows
-      .map((row) => ({ ...row, name: row.name.trim() }))
+      .map(({ id, name }) => ({ id, name: name.trim() }))
       .filter((row) => row.name.length > 0);
     if (drafts.length === 0) {
       setMessage("Mindestens eine Person ist nötig.");
@@ -53,7 +60,7 @@ export function PersonsStep({ persons, onSave }: PersonsStepProps) {
   return (
     <div className="space-y-3">
       {rows.map((row, index) => (
-        <div key={row.id ?? index} className="flex gap-2">
+        <div key={row.key} className="flex gap-2">
           <Input
             aria-label={`Name ${index + 1}`}
             value={row.name}
@@ -77,7 +84,7 @@ export function PersonsStep({ persons, onSave }: PersonsStepProps) {
           type="button"
           variant="outline"
           disabled={rows.length >= MAX_PERSONS}
-          onClick={() => setRows((cur) => [...cur, { name: "" }])}
+          onClick={() => setRows((cur) => [...cur, newRow()])}
         >
           <Plus className="size-4" />
           Person hinzufügen

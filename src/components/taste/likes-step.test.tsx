@@ -28,8 +28,8 @@ describe("LimitsStep", () => {
     fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith([
-        { id: "a", name: "Anna", limits: ["horror"], limitsText: "" },
-        { id: "b", name: "Ben", limits: ["horror"], limitsText: "Spinnen" },
+        { id: "a", limits: ["horror"], limitsText: "" },
+        { id: "b", limits: ["horror"], limitsText: "Spinnen" },
       ]),
     );
   });

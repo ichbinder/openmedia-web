@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Heart } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { LikesStep } from "@/components/taste/likes-step";
-import { LimitsStep } from "@/components/taste/limits-step";
+import { LimitsStep, type LimitEdit } from "@/components/taste/limits-step";
 import { PersonsStep, type PersonDraft } from "@/components/taste/persons-step";
 import { QuickRound } from "@/components/taste/quick-round";
 import { TraktStep } from "@/components/taste/trakt-step";
@@ -81,6 +81,15 @@ export default function GeschmackPage() {
     return save({ persons });
   }
 
+  function saveLimits(edits: LimitEdit[]) {
+    const byId = new Map(edits.map((e) => [e.id, e]));
+    const persons = (taste?.persons ?? []).map((p) => {
+      const edit = byId.get(p.id);
+      return edit ? { ...p, limits: edit.limits, limitsText: edit.limitsText } : p;
+    });
+    return save({ persons });
+  }
+
   return (
     <ProtectedRoute message="Melde dich an, um euren Geschmack einzustellen.">
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
@@ -121,7 +130,7 @@ export default function GeschmackPage() {
                 <LimitsStep
                   key={taste.persons.map((p) => p.id).join()}
                   persons={taste.persons}
-                  onSave={(persons) => save({ persons })}
+                  onSave={saveLimits}
                 />
               )}
             </Section>
