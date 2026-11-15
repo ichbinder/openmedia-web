@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getToken } from "@/lib/auth";
+import { formatRunTime } from "@/lib/format-run-time";
 import {
   getAiSettings,
   putAiSettings,
@@ -14,21 +15,6 @@ import {
 } from "@/lib/backend";
 
 const MODEL_PLACEHOLDER = "moonshotai/kimi-k3";
-const TIME_ZONE = "Europe/Berlin";
-
-function dayKey(date: Date) {
-  return date.toLocaleDateString("de-DE", { timeZone: TIME_ZONE });
-}
-
-function formatRunTime(iso: string): string {
-  const date = new Date(iso);
-  const time = date.toLocaleTimeString("de-DE", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit" });
-  const now = new Date();
-  if (dayKey(date) === dayKey(now)) return `heute ${time}`;
-  if (dayKey(date) === dayKey(new Date(now.getTime() - 86_400_000))) return `gestern ${time}`;
-  return `${dayKey(date)} ${time}`;
-}
-
 function runStatusLine(lastRun: AiSettingsView["lastRun"]): string | null {
   if (!lastRun) return null;
   if (lastRun.status === "running") return "Lauf läuft …";
