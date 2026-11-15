@@ -1,5 +1,6 @@
 import { getTrendingMovies } from "@/lib/tmdb";
 import { HeroBanner } from "@/components/movie/hero-banner";
+import { ContinueRow } from "@/components/home/continue-row";
 import { MovieGrid } from "@/components/movie/movie-grid";
 import { AlertTriangle } from "lucide-react";
 
@@ -31,6 +32,7 @@ export default async function Home() {
   return (
     <>
       {heroMovie && <HeroBanner movie={heroMovie} />}
+      <ContinueRow />
       <MovieGrid movies={gridMovies} />
     </>
   );

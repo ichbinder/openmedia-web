@@ -541,4 +541,15 @@ describe("SeasonList", () => {
       expect(mockCandidates).toHaveBeenCalledTimes(1);
     });
   });
+
+  it("shows a progress bar for a started episode", async () => {
+    const res = showWith([]) as unknown as { data: Record<string, unknown> };
+    res.data.myProgress = [
+      { season: 1, episode: 1, positionSec: 1500, durationSec: 6000, state: "started" },
+    ];
+    mockGetShow.mockResolvedValue(res as never);
+    render(<SeasonList showId={7} seasons={seasons as never} />);
+    const bar = await screen.findByRole("progressbar");
+    expect(bar.getAttribute("aria-valuenow")).toBe("25");
+  });
 });

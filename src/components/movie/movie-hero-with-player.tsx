@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/auth-context";
 import { useDownloads } from "@/contexts/download-context";
 import { VideoPlayer } from "@/components/movie/video-player";
-import type { Resume } from "@/lib/backend";
+import { WatchProgress } from "@/components/ui/watch-progress";
+import type { MyProgress, Resume } from "@/lib/backend";
 import type { MovieDetail } from "@/lib/tmdb";
 import { getBackdropUrl } from "@/lib/tmdb";
 import { qualityRank } from "@/lib/utils";
@@ -60,7 +61,11 @@ export function MovieHeroWithPlayer({
   // Track the best available file (with s3StreamKey) for this movie
   const userId = user?.id;
   const checkKey = userId ? `${userId}|${movie.id}` : null;
-  const [availability, setAvailability] = useState<{ key: string; fileId: string | null } | null>(null);
+  const [availability, setAvailability] = useState<{
+    key: string;
+    fileId: string | null;
+    myProgress: MyProgress | null;
+  } | null>(null);
   const isCheckingAvailability = checkKey !== null && availability?.key !== checkKey;
   const streamableFileId = checkKey !== null && availability?.key === checkKey ? availability.fileId : null;
 
@@ -71,7 +76,7 @@ export function MovieHeroWithPlayer({
     let cancelled = false;
 
     checkAvailability(movie.id)
-      .then((files) => {
+      .then(({ files, myProgress }) => {
         if (cancelled) return;
 
         // Find the best file with a stream version (s3StreamKey = browser-compatible MP4)
@@ -82,7 +87,7 @@ export function MovieHeroWithPlayer({
             return qualityRank(a.qualityTier || a.resolution) - qualityRank(b.qualityTier || b.resolution);
           });
         const fileId = streamable[0]?.id ?? null;
-        setAvailability({ key, fileId });
+        setAvailability({ key, fileId, myProgress });
 
         // Auto-play when navigated with #play hash (from library page)
         if (fileId && window.location.hash === "#play") {
@@ -94,13 +99,18 @@ export function MovieHeroWithPlayer({
       .catch((err) => {
         if (cancelled) return;
         console.error("[MovieHeroWithPlayer] Availability check failed:", err);
-        setAvailability({ key, fileId: null });
+        setAvailability({ key, fileId: null, myProgress: null });
       });
 
     return () => {
       cancelled = true;
     };
   }, [userId, movie.id, checkAvailability, startStream]);
+
+  const progress =
+    checkKey !== null && availability?.key === checkKey && availability.myProgress?.state === "started"
+      ? availability.myProgress
+      : null;
 
   const handlePlay = useCallback(() => {
     if (!streamableFileId || isLoadingStream) return;
@@ -156,6 +166,14 @@ export function MovieHeroWithPlayer({
             )}
           </div>
         </button>
+      )}
+      {progress && (
+        <div className="absolute inset-x-0 bottom-0 z-10">
+          <WatchProgress
+            positionSec={progress.positionSec}
+            durationSec={progress.durationSec}
+          />
+        </div>
       )}
     </section>
   );

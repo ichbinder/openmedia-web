@@ -25,6 +25,7 @@ import {
   getStreamLink as getStreamLinkApi,
   getMovieCandidates,
   requestMovieDownload,
+  type MyProgress,
   type Resume,
 } from "@/lib/backend";
 
@@ -82,7 +83,9 @@ interface DownloadContextValue {
   /** Get a specific job by NZB file ID */
   getJobForFile: (nzbFileId: string) => DownloadJob | undefined;
   /** Check if a TMDB movie has NZB files available */
-  checkAvailability: (tmdbId: number) => Promise<NzbFileInfo[]>;
+  checkAvailability: (
+    tmdbId: number,
+  ) => Promise<{ files: NzbFileInfo[]; myProgress: MyProgress | null }>;
   loadMovieCandidates: (tmdbId: number) => Promise<MovieCandidate[] | null>;
   requestMovie: (
     body: MovieRequestBody
@@ -398,15 +401,20 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
 
   // ── Check NZB availability for a TMDB movie ──────────────
   const checkAvailability = useCallback(
-    async (tmdbId: number): Promise<NzbFileInfo[]> => {
+    async (
+      tmdbId: number,
+    ): Promise<{ files: NzbFileInfo[]; myProgress: MyProgress | null }> => {
       const token = getToken();
-      if (!token) return [];
+      if (!token) return { files: [], myProgress: null };
 
       const res = await getNzbMovieByTmdb(tmdbId, token);
       if (res.ok && res.data?.movie?.nzbFiles) {
-        return res.data.movie.nzbFiles;
+        return {
+          files: res.data.movie.nzbFiles,
+          myProgress: res.data.myProgress ?? null,
+        };
       }
-      return [];
+      return { files: [], myProgress: null };
     },
     []
   );

@@ -9,6 +9,7 @@ import {
   getNzbShowByTmdb,
   requestEpisodes,
   type EpisodeRequestView,
+  type MyProgress,
   type NzbShowInfo,
   type Resume,
 } from "@/lib/backend";
@@ -16,6 +17,7 @@ import type { EpisodeSummary, SeasonSummary } from "@/lib/tmdb";
 import { qualityRank } from "@/lib/utils";
 import { useDownloads } from "@/contexts/download-context";
 import { VideoPlayer } from "@/components/movie/video-player";
+import { WatchProgress } from "@/components/ui/watch-progress";
 import { EpisodeCandidates } from "./episode-candidates";
 
 type Version = NzbShowInfo["episodes"][number]["nzbFiles"][number];
@@ -71,7 +73,7 @@ const localToday = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-function requestNote(r: EpisodeRequestView) {
+export function requestNote(r: Pick<EpisodeRequestView, "status" | "waitReason">) {
   if (r.status === "downloading") return "Wird geladen…";
   if (r.status === "expired") return "Keine Version gefunden";
   if (r.status === "searching" || !r.waitReason) return "Wird gesucht…";
@@ -91,6 +93,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
   const [requests, setRequests] = useState<Map<string, EpisodeRequestView>>(
     new Map(),
   );
+  const [progress, setProgress] = useState<Map<string, MyProgress>>(new Map());
   const [hasToken, setHasToken] = useState(false);
   const [today, setToday] = useState<string | null>(null);
   const [requestingKeys, setRequestingKeys] = useState<Set<string>>(new Set());
@@ -131,6 +134,14 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
           ]),
         );
         setVersions(loaded);
+        setProgress(
+          new Map(
+            (res.data.myProgress ?? []).map((p) => [
+              episodeCode(p.season, p.episode),
+              p,
+            ]),
+          ),
+        );
         const initial = (res.data.myRequests ?? []).map(
           (r) => [episodeCode(r.season, r.episode), r] as const,
         );
@@ -315,6 +326,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                     const downloadVersion = chosen ?? bestVersion(files, "s3Key");
                     const hasVersion = isPlayable(files);
                     const req = requests.get(code);
+                    const watched = progress.get(code);
                     const canRequest = hasToken && isAired(episode);
                     const busy = [streamVersion, downloadVersion].some(
                       (v) => v !== undefined && busyId === v.id,
@@ -432,6 +444,14 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                               )}
                           </div>
                         </div>
+                        {watched?.state === "started" && (
+                          <div className="mt-2">
+                            <WatchProgress
+                              positionSec={watched.positionSec}
+                              durationSec={watched.durationSec}
+                            />
+                          </div>
+                        )}
                         {canRequest && expanded.has(code) && (
                           <div className="mt-3">
                             <EpisodeCandidates

@@ -173,8 +173,14 @@ export interface NzbMovieInfo {
   nzbFiles: NzbFileInfo[];
 }
 
+export interface MyProgress {
+  positionSec: number;
+  durationSec: number;
+  state: "new" | "started" | "finished";
+}
+
 export async function getNzbMovieByTmdb(tmdbId: number, token: string) {
-  return backendFetch<{ movie: NzbMovieInfo }>(`/nzb/movies/by-tmdb/${tmdbId}`, { token });
+  return backendFetch<{ movie: NzbMovieInfo; myProgress: MyProgress | null }>(`/nzb/movies/by-tmdb/${tmdbId}`, { token });
 }
 
 export interface EpisodeRequestView {
@@ -206,7 +212,7 @@ export interface NzbShowInfo {
 }
 
 export async function getNzbShowByTmdb(tmdbId: number, token: string) {
-  return backendFetch<{ show: NzbShowInfo; myRequests: EpisodeRequestView[]; myLibrary: EpisodeCode[] }>(`/nzb/shows/by-tmdb/${tmdbId}`, { token });
+  return backendFetch<{ show: NzbShowInfo; myRequests: EpisodeRequestView[]; myLibrary: EpisodeCode[]; myProgress?: (MyProgress & { season: number; episode: number })[] }>(`/nzb/shows/by-tmdb/${tmdbId}`, { token });
 }
 
 export async function requestEpisodes(
@@ -315,10 +321,7 @@ export async function getStreamLink(nzbFileId: string, token: string, expires = 
 
 // ── Watch Progress ───────────────────────────────────────────
 
-interface RequestState {
-  status: string;
-  waitReason: string | null;
-}
+type RequestState = Pick<EpisodeRequestView, "status" | "waitReason">;
 
 export interface ContinueItem {
   kind: "movie" | "episode";
