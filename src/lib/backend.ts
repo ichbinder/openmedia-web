@@ -592,3 +592,65 @@ export function traktConnect(token: string) {
 export function traktPoll(token: string) {
   return backendFetch<TraktPollResult>("/trakt/poll", { method: "POST", token });
 }
+
+// ── KI-Vorschläge ────────────────────────────────────────────
+
+export interface AiSettingsView {
+  model: string;
+  hasKey: boolean;
+  lastRun: { status: "running" | "done" | "failed"; finishedAt: string | null; error: string | null } | null;
+}
+
+export interface SuggestionItem {
+  kind: "movie" | "show";
+  tmdbId: number;
+  name: string;
+  year: number | null;
+  posterPath: string | null;
+  reason: string;
+}
+
+export interface SuggestionRowView {
+  key: string;
+  title: string;
+  items: SuggestionItem[];
+}
+
+export interface SuggestionsView {
+  status: "no_key" | "none" | "ready";
+  createdAt: string | null;
+  running: boolean;
+  rows: SuggestionRowView[];
+}
+
+export function getAiSettings(token: string) {
+  return backendFetch<AiSettingsView>("/ai-settings", { token });
+}
+
+export function putAiSettings(body: { model: string; apiKey?: string }, token: string) {
+  return backendFetch<{ model: string; hasKey: boolean }>("/ai-settings", {
+    method: "PUT",
+    body: JSON.stringify(body),
+    token,
+  });
+}
+
+export function testAiSettings(token: string) {
+  return backendFetch<{ ok: boolean; error?: string }>("/ai-settings/test", { method: "POST", token });
+}
+
+export function getSuggestions(token: string) {
+  return backendFetch<SuggestionsView>("/suggestions", { token });
+}
+
+export function refreshSuggestions(token: string) {
+  return backendFetch<{ error?: string } | null>("/suggestions/refresh", { method: "POST", token });
+}
+
+export function dismissSuggestion(kind: "movie" | "show", tmdbId: number, token: string) {
+  return backendFetch<null>("/suggestions/dismiss", {
+    method: "POST",
+    body: JSON.stringify({ kind, tmdbId }),
+    token,
+  });
+}

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
-import { User, Key, Settings, Server, Heart } from "lucide-react";
+import { User, Key, Settings, Server, Heart, Sparkles } from "lucide-react";
 import { ApiTokenManager } from "@/components/profile/api-tokens";
+import { AiSettingsSection } from "@/components/profile/ai-settings-section";
 import { JellyfinPluginSetup } from "@/components/profile/jellyfin-plugin-setup";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 
@@ -67,6 +68,20 @@ export default function ProfilePage() {
             >
               Geschmack einstellen
             </Link>
+          </div>
+        </div>
+
+        {/* KI-Vorschläge */}
+        <div className="mt-8">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Sparkles className="size-5" />
+            KI-Vorschläge
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Jede Nacht erstellt die KI Vorschläge aus eurem Geschmack. Dafür braucht es einen eigenen OpenRouter-Key.
+          </p>
+          <div className="mt-4">
+            <AiSettingsSection />
           </div>
         </div>
 
