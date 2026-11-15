@@ -1,4 +1,4 @@
-import type { Resume } from "./backend";
+import type { NextEpisode, Resume } from "./backend";
 
 export const PROGRESS = {
   REPORT_INTERVAL_SEC: 30,
@@ -20,4 +20,18 @@ export function formatTimestamp(sec: number): string {
   return hours > 0
     ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}`
     : `${minutes}:${seconds}`;
+}
+
+export type NextPhase = "hidden" | "button" | "countdown" | "download";
+
+export function nextEpisodePhase(
+  remainingSec: number,
+  ended: boolean,
+  next: NextEpisode | null,
+): NextPhase {
+  if (!next) return "hidden";
+  const inTail = ended || remainingSec <= PROGRESS.NEXT_BUTTON_SEC;
+  if (!next.nzbFileId) return inTail ? "download" : "hidden";
+  if (ended) return "countdown";
+  return inTail ? "button" : "hidden";
 }

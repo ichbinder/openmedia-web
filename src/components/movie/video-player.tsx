@@ -14,10 +14,18 @@ import {
 } from "@vidstack/react/player/layouts/default";
 import { X } from "lucide-react";
 
+import { NextEpisodeOverlay } from "@/components/player/next-episode-overlay";
 import { ResumePrompt } from "@/components/player/resume-prompt";
 import { getToken } from "@/lib/auth";
-import { reportProgress, type Resume } from "@/lib/backend";
-import { shouldAskResume } from "@/lib/progress";
+import { useDownloads } from "@/contexts/download-context";
+import {
+  getNextEpisode,
+  reportProgress,
+  requestEpisodes,
+  type NextEpisode,
+  type Resume,
+} from "@/lib/backend";
+import { nextEpisodePhase, shouldAskResume } from "@/lib/progress";
 import { createProgressReporter, type ProgressBody } from "@/lib/progress-reporter";
 
 import "@vidstack/react/player/styles/default/theme.css";
@@ -68,16 +76,28 @@ function sendProgress(body: ProgressBody, beacon: boolean) {
 }
 
 export function VideoPlayer({
-  src,
-  title,
+  src: initialSrc,
+  title: initialTitle,
   posterUrl,
   onClose,
   autoPlay = false,
-  nzbFileId,
+  nzbFileId: initialNzbFileId,
   resume = null,
   startAt,
 }: VideoPlayerProps) {
   const playerRef = useRef<MediaPlayerInstance>(null);
+  const { getStream } = useDownloads();
+  const [current, setCurrent] = useState({
+    nzbFileId: initialNzbFileId,
+    src: initialSrc,
+    title: initialTitle,
+  });
+  const { nzbFileId, src, title } = current;
+  const [chained, setChained] = useState(false);
+  const [next, setNext] = useState<NextEpisode | null>(null);
+  const [remainingSec, setRemainingSec] = useState(Infinity);
+  const [ended, setEnded] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [asking, setAsking] = useState(
     () => startAt === undefined && shouldAskResume(resume),
   );
@@ -100,6 +120,49 @@ export function VideoPlayer({
       reporter.dispose();
     };
   }, [reporter]);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    let cancelled = false;
+    getNextEpisode(nzbFileId, token)
+      .then((res) => {
+        if (!cancelled && res.ok) setNext(res.data?.next ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [nzbFileId]);
+
+  const switching = useRef(false);
+  async function playNext() {
+    if (!next?.nzbFileId || switching.current) return;
+    switching.current = true;
+    const stream = await getStream(next.nzbFileId);
+    switching.current = false;
+    if (!stream) return;
+    pendingSeek.current = undefined;
+    setNext(null);
+    setRemainingSec(Infinity);
+    setEnded(false);
+    setDismissed(false);
+    setChained(true);
+    setCurrent({
+      nzbFileId: next.nzbFileId,
+      src: stream.url,
+      title: `S${next.season} · F${next.episode}${next.titleDe ? ` · ${next.titleDe}` : ""}`,
+    });
+  }
+
+  function downloadNext() {
+    const token = getToken();
+    if (!token || !next) return;
+    requestEpisodes(
+      { tmdbId: next.showTmdbId, season: next.season, episode: next.episode },
+      token,
+    ).catch(() => {});
+  }
 
   const pendingSeek = useRef<number | undefined>(startAt);
   function applyPendingSeek() {
@@ -169,14 +232,18 @@ export function VideoPlayer({
         ref={playerRef}
         src={{ src, type: getMimeType(src) }}
         title={title}
-        autoPlay={autoPlay && !asking}
+        autoPlay={(autoPlay || chained) && !asking}
         onCanPlay={applyPendingSeek}
-        onTimeUpdate={({ currentTime }) =>
-          reporter.tick(currentTime, currentDuration(), !playerRef.current?.state.paused)
-        }
+        onTimeUpdate={({ currentTime }) => {
+          reporter.tick(currentTime, currentDuration(), !playerRef.current?.state.paused);
+          setRemainingSec(Math.floor(currentDuration() - currentTime));
+        }}
         onPause={() => reporter.pause(playerRef.current?.currentTime ?? 0, currentDuration())}
         onSeeked={(currentTime) => reporter.seeked(currentTime, currentDuration())}
-        onEnded={() => reporter.ended(playerRef.current?.currentTime ?? 0, currentDuration())}
+        onEnded={() => {
+          reporter.ended(playerRef.current?.currentTime ?? 0, currentDuration());
+          setEnded(true);
+        }}
         playsInline
         crossOrigin=""
         onError={handleError}
@@ -197,6 +264,15 @@ export function VideoPlayer({
           // Disable download button in the player — user has the existing download button
           download={false}
         />
+        {next && !dismissed && (
+          <NextEpisodeOverlay
+            phase={nextEpisodePhase(remainingSec, ended, next)}
+            next={next}
+            onPlayNext={playNext}
+            onCancel={() => setDismissed(true)}
+            onDownload={downloadNext}
+          />
+        )}
         {asking && resume && (
           <ResumePrompt
             positionSec={resume.positionSec}
