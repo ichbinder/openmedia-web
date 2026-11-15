@@ -38,6 +38,10 @@ function flush() {
   }
 }
 
+function hasData(meta: TitleMeta | null) {
+  return !!meta && (meta.label !== null || meta.score !== null || Object.keys(meta.ratings).length > 0);
+}
+
 export function loadTitleMeta(kind: Kind, tmdbId: number): Promise<TitleMeta | null> {
   const key = `${kind}:${tmdbId}`;
   const cached = cache.get(key);
@@ -47,6 +51,9 @@ export function loadTitleMeta(kind: Kind, tmdbId: number): Promise<TitleMeta | n
     timer ??= setTimeout(flush, BATCH_DELAY_MS);
   });
   cache.set(key, promise);
+  void promise.then((meta) => {
+    if (!hasData(meta) && cache.get(key) === promise) cache.delete(key);
+  });
   return promise;
 }
 

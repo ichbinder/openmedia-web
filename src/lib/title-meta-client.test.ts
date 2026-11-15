@@ -68,4 +68,32 @@ describe("loadTitleMeta", () => {
     expect(await result).toBeNull();
     expect(getTitleMeta).not.toHaveBeenCalled();
   });
+
+  it("retries after a failed request", async () => {
+    getTitleMeta.mockRejectedValueOnce(new Error("boom"));
+    const first = loadTitleMeta("movie", 1);
+    await vi.advanceTimersByTimeAsync(30);
+    expect(await first).toBeNull();
+    const second = loadTitleMeta("movie", 1);
+    await vi.advanceTimersByTimeAsync(30);
+    expect((await second)?.label).toBe("NETFLIX");
+    expect(getTitleMeta).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache an empty result", async () => {
+    getTitleMeta.mockImplementation((items) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        data: { items: items.map((i) => ({ ...i, label: null, brand: null, ratings: {}, score: null })) },
+      }),
+    );
+    const first = loadTitleMeta("movie", 1);
+    await vi.advanceTimersByTimeAsync(30);
+    await first;
+    const second = loadTitleMeta("movie", 1);
+    await vi.advanceTimersByTimeAsync(30);
+    await second;
+    expect(getTitleMeta).toHaveBeenCalledTimes(2);
+  });
 });

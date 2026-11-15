@@ -3,12 +3,12 @@ import { cn } from "@/lib/utils";
 
 const BRAND_CLASSES: Record<Brand, string> = {
   netflix: "bg-red-600 text-white",
-  prime: "bg-sky-500 text-white",
+  prime: "bg-sky-700 text-white",
   disney: "bg-blue-800 text-white",
   apple: "bg-neutral-900 text-white ring-1 ring-white/40",
   hbo: "bg-purple-700 text-white",
   paramount: "bg-blue-600 text-white",
-  sky: "bg-cyan-600 text-white",
+  sky: "bg-cyan-700 text-white",
   cinema: "bg-cinema-gold text-cinema-gold-foreground",
   other: "bg-muted text-muted-foreground",
 };
