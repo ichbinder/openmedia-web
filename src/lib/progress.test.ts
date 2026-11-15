@@ -9,6 +9,12 @@ describe("shouldAskResume", () => {
   it("fragt bei angefangenem Titel", () => {
     expect(shouldAskResume({ positionSec: 2832, durationSec: 6000, finished: false })).toBe(true);
   });
+  it("fragt auch, wenn die zurückgesetzte Stelle unter 60 s liegt", () => {
+    expect(shouldAskResume({ positionSec: 57, durationSec: 6000, finished: false })).toBe(true);
+  });
+  it("fragt nicht bei Stelle 0", () => {
+    expect(shouldAskResume({ positionSec: 0, durationSec: 6000, finished: false })).toBe(false);
+  });
   it("fragt nicht bei fertigem Titel", () => {
     expect(shouldAskResume({ positionSec: 2832, durationSec: 6000, finished: true })).toBe(false);
   });

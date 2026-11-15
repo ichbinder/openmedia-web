@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Film, X } from "lucide-react";
@@ -20,6 +20,7 @@ import { WatchProgress } from "@/components/ui/watch-progress";
 import { requestNote } from "@/components/show/season-list";
 
 const itemKey = (i: ContinueItem) => `${i.kind}-${i.tmdbId}`;
+const RELOAD_AFTER_CLOSE_MS = 500;
 
 export function ContinueRow() {
   const { getStream } = useDownloads();
@@ -29,58 +30,93 @@ export function ContinueRow() {
     url: string;
     resume: Resume | null;
   } | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const mounted = useRef(true);
+  const inFlight = useRef(false);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     const token = getToken();
     if (!token) return;
-    let cancelled = false;
-    getContinueWatching(token)
-      .then((res) => {
-        if (!cancelled && res.ok) setItems(res.data.items);
-      })
-      .catch((err) => console.error("[ContinueRow] load failed:", err));
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const res = await getContinueWatching(token);
+      if (mounted.current && res.ok) setItems(res.data.items);
+    } catch (err) {
+      console.error("[ContinueRow] load failed:", err);
+    }
   }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch; setState runs after await, the rule cannot tell
+    void load();
+    return () => {
+      mounted.current = false;
+    };
+  }, [load]);
 
   if (items.length === 0) return null;
 
-  async function play(item: ContinueItem) {
+  async function guarded(item: ContinueItem, action: () => Promise<void>) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusyKey(itemKey(item));
     try {
-      const stream = await getStream(item.nzbFileId!);
-      if (stream) setPlaying({ item, ...stream });
-      else toast.error("Stream konnte nicht gestartet werden");
-    } catch {
-      toast.error("Stream fehlgeschlagen");
+      await action();
+    } finally {
+      inFlight.current = false;
+      setBusyKey(null);
     }
   }
 
-  function hide(item: ContinueItem) {
-    const token = getToken();
-    setItems((prev) => prev.filter((i) => itemKey(i) !== itemKey(item)));
-    if (token) {
-      void hideContinue(item.kind === "movie" ? "movie" : "show", item.tmdbId, token);
-    }
+  function play(item: ContinueItem) {
+    return guarded(item, async () => {
+      try {
+        const stream = await getStream(item.nzbFileId!);
+        if (stream) setPlaying({ item, ...stream });
+        else toast.error("Stream konnte nicht gestartet werden");
+      } catch {
+        toast.error("Stream fehlgeschlagen");
+      }
+    });
   }
 
-  async function download(item: ContinueItem) {
+  function closePlayer() {
+    setPlaying(null);
+    setTimeout(() => void load(), RELOAD_AFTER_CLOSE_MS);
+  }
+
+  async function hide(item: ContinueItem) {
     const token = getToken();
     if (!token) return;
-    const res = await requestEpisodes(
-      { tmdbId: item.tmdbId, season: item.season!, episode: item.episode! },
-      token,
+    const index = items.findIndex((i) => itemKey(i) === itemKey(item));
+    setItems((prev) => prev.filter((i) => itemKey(i) !== itemKey(item)));
+    const res = await hideContinue(item.kind === "movie" ? "movie" : "show", item.tmdbId, token).catch(
+      () => null,
     );
-    const created = res.data?.requests?.find(
-      (r) => r.season === item.season && r.episode === item.episode,
-    );
-    if (res.ok && created) {
-      setItems((prev) =>
-        prev.map((i) => (itemKey(i) === itemKey(item) ? { ...i, request: created } : i)),
-      );
-    } else {
-      toast.error("Anfrage fehlgeschlagen");
-    }
+    if (res?.ok) return;
+    setItems((prev) => [...prev.slice(0, index), item, ...prev.slice(index)]);
+    toast.error("Entfernen fehlgeschlagen");
+  }
+
+  function download(item: ContinueItem) {
+    return guarded(item, async () => {
+      const token = getToken();
+      if (!token) return;
+      const res = await requestEpisodes(
+        { tmdbId: item.tmdbId, season: item.season!, episode: item.episode! },
+        token,
+      ).catch(() => null);
+      const created = res?.ok
+        ? res.data?.requests?.find((r) => r.season === item.season && r.episode === item.episode)
+        : undefined;
+      if (created) {
+        setItems((prev) =>
+          prev.map((i) => (itemKey(i) === itemKey(item) ? { ...i, request: created } : i)),
+        );
+      } else {
+        toast.error("Anfrage fehlgeschlagen");
+      }
+    });
   }
 
   return (
@@ -91,6 +127,7 @@ export function ContinueRow() {
           const poster = getPosterUrl(item.posterPath, "w342");
           const isEpisode = item.kind === "episode";
           const pending = item.request && item.request.status !== "done";
+          const busy = busyKey === itemKey(item);
           const body = (
             <>
               <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
@@ -133,7 +170,13 @@ export function ContinueRow() {
               className="relative w-40 shrink-0 overflow-hidden rounded-lg bg-card"
             >
               {item.nzbFileId ? (
-                <button type="button" onClick={() => play(item)} className="block w-full">
+                <button
+                  type="button"
+                  onClick={() => play(item)}
+                  disabled={busy}
+                  aria-busy={busy}
+                  className="block w-full disabled:opacity-60"
+                >
                   {body}
                 </button>
               ) : isEpisode ? (
@@ -148,7 +191,8 @@ export function ContinueRow() {
                       <button
                         type="button"
                         onClick={() => download(item)}
-                        className="rounded-md bg-cinema-gold/20 px-2 py-1 text-xs font-medium text-cinema-gold hover:bg-cinema-gold/30"
+                        disabled={busy}
+                        className="rounded-md disabled:opacity-60 bg-cinema-gold/20 px-2 py-1 text-xs font-medium text-cinema-gold hover:bg-cinema-gold/30"
                       >
                         Herunterladen
                       </button>
@@ -181,7 +225,7 @@ export function ContinueRow() {
               nzbFileId={playing.item.nzbFileId!}
               title={playing.item.title}
               startAt={playing.resume?.positionSec}
-              onClose={() => setPlaying(null)}
+              onClose={closePlayer}
               autoPlay
             />
           </div>

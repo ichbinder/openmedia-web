@@ -9,7 +9,7 @@ export const PROGRESS = {
 } as const;
 
 export function shouldAskResume(resume: Resume | null): boolean {
-  return resume !== null && !resume.finished && resume.positionSec > PROGRESS.RESUME_MIN_SEC;
+  return resume !== null && !resume.finished && resume.positionSec > 0;
 }
 
 export function formatTimestamp(sec: number): string {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { toast } from "sonner";
 import { ContinueRow } from "./continue-row";
 import type { ContinueItem } from "@/lib/backend";
 
@@ -16,8 +17,20 @@ vi.mock("@/contexts/download-context", () => ({
   useDownloads: () => ({ getStream: mockGetStream }),
 }));
 vi.mock("@/components/movie/video-player", () => ({
-  VideoPlayer: ({ startAt, nzbFileId }: { startAt?: number; nzbFileId: string }) => (
-    <div data-testid="player" data-start={startAt} data-file={nzbFileId} />
+  VideoPlayer: ({
+    startAt,
+    nzbFileId,
+    onClose,
+  }: {
+    startAt?: number;
+    nzbFileId: string;
+    onClose: () => void;
+  }) => (
+    <div data-testid="player" data-start={startAt} data-file={nzbFileId}>
+      <button type="button" onClick={onClose}>
+        Player schließen
+      </button>
+    </div>
   ),
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
@@ -126,5 +139,48 @@ describe("ContinueRow", () => {
     const player = await screen.findByTestId("player");
     expect(player.getAttribute("data-start")).toBe("3000");
     expect(player.getAttribute("data-file")).toBe("f1");
+  });
+
+  it("reloads the row after the player closes", async () => {
+    load({ ...episode, season: 1, episode: 3, nzbFileId: "e3" });
+    mockGetStream.mockResolvedValue({ url: "u", resume: null });
+    render(<ContinueRow />);
+    fireEvent.click(await screen.findByText("S1 · F3"));
+    await screen.findByTestId("player");
+    load({ ...episode, season: 1, episode: 4, nzbFileId: "e4", positionSec: 0, durationSec: 0 });
+    fireEvent.click(screen.getByText("Player schließen"));
+    expect(await screen.findByText("S1 · F4", {}, { timeout: 2000 })).toBeTruthy();
+    expect(backend.getContinueWatching).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId("player")).toBeNull();
+  });
+
+  it("starts playback only once on a double click", async () => {
+    load(base);
+    let resolve: (v: unknown) => void = () => {};
+    mockGetStream.mockReturnValue(new Promise((r) => (resolve = r)));
+    render(<ContinueRow />);
+    const tile = await screen.findByText("Alien");
+    fireEvent.click(tile);
+    fireEvent.click(tile);
+    resolve({ url: "u", resume: null });
+    await screen.findByTestId("player");
+    expect(mockGetStream).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an error when the download request throws", async () => {
+    load({ ...episode, nzbFileId: null });
+    backend.requestEpisodes.mockRejectedValue(new Error("offline"));
+    render(<ContinueRow />);
+    fireEvent.click(await screen.findByText("Herunterladen"));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Anfrage fehlgeschlagen"));
+  });
+
+  it("restores the tile when hiding fails", async () => {
+    load(episode);
+    backend.hideContinue.mockResolvedValue({ ok: false, status: 500, data: {} });
+    render(<ContinueRow />);
+    fireEvent.click(await screen.findByLabelText("Aus Weiterschauen entfernen"));
+    expect(await screen.findByText("Severance")).toBeTruthy();
+    expect(toast.error).toHaveBeenCalledWith("Entfernen fehlgeschlagen");
   });
 });
