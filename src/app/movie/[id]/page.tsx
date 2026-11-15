@@ -62,7 +62,7 @@ export default async function MovieDetailPage({ params }: MoviePageProps) {
   return (
     <main>
       <MovieHeroWithPlayer movie={movie}>
-        <MovieDetailHero movie={movie} />
+        <MovieDetailHero movie={movie} kind="movie" tmdbId={movie.id} />
       </MovieHeroWithPlayer>
       <MovieActions
         movie={{

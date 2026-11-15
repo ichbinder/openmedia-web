@@ -4,6 +4,8 @@ import type { PreviewData } from "@/app/actions/preview";
 import { getPreview } from "@/app/actions/preview";
 import { PreviewTile } from "./preview-tile";
 
+const mockMeta = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks/use-title-meta", () => ({ useTitleMeta: mockMeta }));
 vi.mock("@/app/actions/preview", () => ({ getPreview: vi.fn() }));
 vi.mock("next/image", () => ({
   default: ({ src, alt }: { src: string; alt: string }) => (
@@ -30,7 +32,6 @@ function renderTile(id: number, kind: "movie" | "tv" = "tv") {
       kind={kind}
       id={id}
       title="Dark"
-      voteAverage={8.4}
       year="2017"
       actions={() => <button>Merken</button>}
     >
@@ -47,6 +48,14 @@ async function hover(tile: HTMLElement, ms = 1000) {
 
 describe("PreviewTile", () => {
   beforeEach(() => {
+    mockMeta.mockReturnValue({
+      kind: "show",
+      tmdbId: 1,
+      label: null,
+      brand: null,
+      ratings: { imdb: 6.3 },
+      score: null,
+    });
     vi.useFakeTimers();
     mockedGetPreview.mockReset();
     mockedGetPreview.mockResolvedValue(data);
@@ -64,7 +73,8 @@ describe("PreviewTile", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(1));
     expect(screen.getByRole("dialog", { name: "Dark" })).toBeTruthy();
-    expect(screen.getByText("★ 8.4")).toBeTruthy();
+    expect(screen.getByText("IMDb 6.3")).toBeTruthy();
+    expect(mockMeta).toHaveBeenCalledWith("show", 1);
     expect(screen.getByText(/3 Staffeln/)).toBeTruthy();
     expect(screen.getByText("Ein Kind verschwindet.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Merken" })).toBeTruthy();

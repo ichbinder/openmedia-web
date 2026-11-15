@@ -65,6 +65,8 @@ export default async function ShowDetailPage({ params }: ShowPageProps) {
   return (
     <div>
       <MovieDetailHero
+        kind="show"
+        tmdbId={showId}
         movie={{
           title: show.name,
           backdrop_path: show.backdrop_path,
@@ -73,7 +75,6 @@ export default async function ShowDetailPage({ params }: ShowPageProps) {
           runtime: null,
           genres: show.genres,
           tagline: show.tagline,
-          vote_average: show.vote_average,
           overview: show.overview,
         }}
       />

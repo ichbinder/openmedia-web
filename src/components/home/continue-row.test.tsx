@@ -9,9 +9,11 @@ const backend = vi.hoisted(() => ({
   hideContinue: vi.fn(),
   requestEpisodes: vi.fn(),
 }));
+const mockMeta = vi.hoisted(() => vi.fn());
 const mockGetStream = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/backend", () => backend);
+vi.mock("@/hooks/use-title-meta", () => ({ useTitleMeta: mockMeta }));
 vi.mock("@/lib/auth", () => ({ getToken: vi.fn(() => "tok") }));
 vi.mock("@/contexts/download-context", () => ({
   useDownloads: () => ({ getStream: mockGetStream }),
@@ -72,6 +74,7 @@ function load(...items: ContinueItem[]) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockMeta.mockReturnValue(null);
   backend.hideContinue.mockResolvedValue({ ok: true });
 });
 
@@ -95,6 +98,13 @@ describe("ContinueRow", () => {
     render(<ContinueRow />);
     expect(await screen.findByText("S2 · F5")).toBeTruthy();
     expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+
+  it("asks for show meta with the show id for an episode", async () => {
+    load(episode);
+    render(<ContinueRow />);
+    await screen.findByText("Severance");
+    expect(mockMeta).toHaveBeenCalledWith("show", 7);
   });
 
   it("hides a tile and calls hideContinue", async () => {

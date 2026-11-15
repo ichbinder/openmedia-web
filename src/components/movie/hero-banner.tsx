@@ -1,15 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Star } from "lucide-react";
+import { TitleMetaBadges } from "@/components/meta/title-meta-badges";
 import type { Movie } from "@/lib/tmdb";
 import { getBackdropUrl } from "@/lib/tmdb";
 
 interface HeroBannerProps {
   movie: Movie;
+  kind?: "movie" | "show";
   href?: string;
 }
 
-export function HeroBanner({ movie, href }: HeroBannerProps) {
+export function HeroBanner({ movie, href, kind = "movie" }: HeroBannerProps) {
   const backdropUrl = getBackdropUrl(movie.backdrop_path, "w1280");
 
   if (!backdropUrl) {
@@ -43,12 +44,10 @@ export function HeroBanner({ movie, href }: HeroBannerProps) {
         </h1>
 
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1 text-cinema-gold">
-            <Star className="size-4 fill-cinema-gold" />
-            {movie.vote_average.toFixed(1)}
-          </span>
           {year && <span>{year}</span>}
         </div>
+
+        <TitleMetaBadges kind={kind} tmdbId={movie.id} />
 
         {overview && (
           <p className="max-w-xl text-sm leading-relaxed text-muted-foreground md:text-base">

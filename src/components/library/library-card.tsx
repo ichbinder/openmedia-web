@@ -11,6 +11,9 @@ import {
   removeFromLibrary,
   getDownloadLink,
 } from "@/lib/backend";
+import { useTitleMeta } from "@/hooks/use-title-meta";
+import { OriginLabel } from "@/components/meta/origin-label";
+import { TileRatings } from "@/components/meta/tile-ratings";
 import { Download, Play, Trash2, Film, Loader2, AlertTriangle } from "lucide-react";
 
 export function libraryItemLink(item: LibraryItem): string {
@@ -31,6 +34,7 @@ export function LibraryCard({
 
   const { episode } = item.nzbFile;
   const title = episode ? episode.show : item.nzbFile.movie;
+  const meta = useTitleMeta(episode ? "show" : "movie", title?.tmdbId ?? 0);
   const detailHref = title ? libraryItemLink(item) : null;
   const posterUrl = title?.posterPath
     ? getPosterUrl(title.posterPath, "w342")
@@ -108,6 +112,7 @@ export function LibraryCard({
               <Film className="size-10 text-muted-foreground" />
             </div>
           )}
+          <OriginLabel meta={meta} className="absolute top-2 left-2" />
         </Link>
       ) : (
         <div className="relative block aspect-[2/3] w-full overflow-hidden bg-muted">
@@ -129,6 +134,7 @@ export function LibraryCard({
           </p>
         )}
         <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+          <TileRatings meta={meta} />
           {title?.year && <span>{title.year}</span>}
           {(item.nzbFile.qualityTier || item.nzbFile.resolution) && (
             <span className="rounded bg-muted px-1.5 py-0.5">

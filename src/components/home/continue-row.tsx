@@ -17,10 +17,58 @@ import { getPosterUrl } from "@/lib/tmdb";
 import { useDownloads } from "@/contexts/download-context";
 import { VideoPlayer } from "@/components/movie/video-player";
 import { WatchProgress } from "@/components/ui/watch-progress";
+import { useTitleMeta } from "@/hooks/use-title-meta";
+import { OriginLabel } from "@/components/meta/origin-label";
+import { TileRatings } from "@/components/meta/tile-ratings";
 import { requestNote } from "@/components/show/season-list";
 
 const itemKey = (i: ContinueItem) => `${i.kind}-${i.tmdbId}`;
 const RELOAD_AFTER_CLOSE_MS = 500;
+
+function ContinueTileBody({ item }: { item: ContinueItem }) {
+  const poster = getPosterUrl(item.posterPath, "w342");
+  const isEpisode = item.kind === "episode";
+  const meta = useTitleMeta(isEpisode ? "show" : "movie", item.tmdbId);
+  return (
+    <>
+      <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
+        {poster ? (
+          <Image
+            src={poster}
+            alt={item.title}
+            fill
+            className="object-cover"
+            sizes="160px"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <Film className="size-8 text-muted-foreground" />
+          </div>
+        )}
+        <OriginLabel meta={meta} className="absolute top-2 left-2" />
+        <div className="absolute inset-x-0 bottom-0">
+          <WatchProgress
+            positionSec={item.positionSec}
+            durationSec={item.durationSec}
+          />
+        </div>
+      </div>
+      <div className="p-2 text-left">
+        <h3 className="truncate text-sm font-medium text-foreground">
+          {item.title}
+        </h3>
+        {isEpisode && (
+          <p className="text-xs text-muted-foreground">
+            S{item.season} · F{item.episode}
+          </p>
+        )}
+        <p className="h-4 text-xs text-muted-foreground">
+          <TileRatings meta={meta} />
+        </p>
+      </div>
+    </>
+  );
+}
 
 export function ContinueRow() {
   const { getStream } = useDownloads();
@@ -124,45 +172,10 @@ export function ContinueRow() {
       <h2 className="mb-3 text-lg font-semibold text-foreground">Weiterschauen</h2>
       <ul className="flex gap-3 overflow-x-auto pb-2">
         {items.map((item) => {
-          const poster = getPosterUrl(item.posterPath, "w342");
           const isEpisode = item.kind === "episode";
           const pending = item.request && item.request.status !== "done";
           const busy = busyKey === itemKey(item);
-          const body = (
-            <>
-              <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
-                {poster ? (
-                  <Image
-                    src={poster}
-                    alt={item.title}
-                    fill
-                    className="object-cover"
-                    sizes="160px"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <Film className="size-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="absolute inset-x-0 bottom-0">
-                  <WatchProgress
-                    positionSec={item.positionSec}
-                    durationSec={item.durationSec}
-                  />
-                </div>
-              </div>
-              <div className="p-2 text-left">
-                <h3 className="truncate text-sm font-medium text-foreground">
-                  {item.title}
-                </h3>
-                {isEpisode && (
-                  <p className="text-xs text-muted-foreground">
-                    S{item.season} · F{item.episode}
-                  </p>
-                )}
-              </div>
-            </>
-          );
+          const body = <ContinueTileBody item={item} />;
 
           return (
             <li

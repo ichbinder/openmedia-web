@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import { Volume2, VolumeX } from "lucide-react";
 import { getPreview, type PreviewData } from "@/app/actions/preview";
+import { useTitleMeta } from "@/hooks/use-title-meta";
+import { AllRatings } from "@/components/meta/all-ratings";
 import { getBackdropUrl } from "@/lib/tmdb";
 import { placePreview } from "./place-preview";
 
@@ -44,7 +46,6 @@ interface PreviewTileProps {
   kind: "movie" | "tv";
   id: number;
   title: string;
-  voteAverage: number;
   year: string;
   children: React.ReactNode;
   actions: (data: PreviewData | null) => React.ReactNode;
@@ -54,11 +55,11 @@ export function PreviewTile({
   kind,
   id,
   title,
-  voteAverage,
   year,
   children,
   actions,
 }: PreviewTileProps) {
+  const titleMeta = useTitleMeta(kind === "tv" ? "show" : "movie", id);
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<PreviewData | null>(null);
   const [muted, setMuted] = useState(true);
@@ -194,10 +195,12 @@ export function PreviewTile({
               <h3 className="text-base font-semibold text-foreground">
                 {title}
               </h3>
-              <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                <span className="text-cinema-gold">{`★ ${voteAverage.toFixed(1)}`}</span>
-                {meta.length > 0 && <span>{meta.join(" · ")}</span>}
-              </div>
+              {meta.length > 0 && (
+                <div className="text-xs text-muted-foreground">
+                  {meta.join(" · ")}
+                </div>
+              )}
+              <AllRatings meta={titleMeta} />
               {data?.overview && (
                 <p className="line-clamp-3 text-sm text-muted-foreground">
                   {data.overview}

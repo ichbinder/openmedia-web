@@ -1,9 +1,11 @@
 import Image from "next/image";
-import { Star } from "lucide-react";
+import { TitleMetaBadges } from "@/components/meta/title-meta-badges";
 import type { MovieDetail } from "@/lib/tmdb";
 import { getBackdropUrl, getPosterUrl } from "@/lib/tmdb";
 
 interface MovieDetailHeroProps {
+  kind: "movie" | "show";
+  tmdbId: number;
   movie: Pick<
     MovieDetail,
     | "title"
@@ -13,7 +15,6 @@ interface MovieDetailHeroProps {
     | "runtime"
     | "genres"
     | "tagline"
-    | "vote_average"
     | "overview"
   >;
 }
@@ -25,7 +26,7 @@ function formatRuntime(minutes: number | null): string | null {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-export function MovieDetailHero({ movie }: MovieDetailHeroProps) {
+export function MovieDetailHero({ movie, kind, tmdbId }: MovieDetailHeroProps) {
   const backdropUrl = getBackdropUrl(movie.backdrop_path, "w1280");
   const posterUrl = getPosterUrl(movie.poster_path, "w500");
   const year = movie.release_date?.split("-")[0] ?? "";
@@ -79,13 +80,11 @@ export function MovieDetailHero({ movie }: MovieDetailHeroProps) {
           )}
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1 text-cinema-gold">
-              <Star className="size-4 fill-cinema-gold" />
-              {movie.vote_average.toFixed(1)}
-            </span>
             {year && <span>{year}</span>}
             {runtime && <span>{runtime}</span>}
           </div>
+
+          <TitleMetaBadges kind={kind} tmdbId={tmdbId} />
 
           {genres && (
             <p className="text-sm text-muted-foreground">{genres}</p>

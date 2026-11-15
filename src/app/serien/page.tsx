@@ -36,7 +36,7 @@ export default async function SerienPage() {
   return (
     <>
       {heroMovie && (
-        <HeroBanner movie={heroMovie} href={`/serie/${heroMovie.id}`} />
+        <HeroBanner movie={heroMovie} kind="show" href={`/serie/${heroMovie.id}`} />
       )}
       <ShowGrid shows={gridShows} />
     </>

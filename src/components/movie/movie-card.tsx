@@ -2,12 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Film, Star } from "lucide-react";
+import { Film } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { Movie } from "@/lib/tmdb";
 import { getPosterUrl } from "@/lib/tmdb";
 import { WatchlistButton } from "@/components/movie/watchlist-button";
 import { PreviewTile } from "@/components/preview/preview-tile";
+import { useTitleMeta } from "@/hooks/use-title-meta";
+import { OriginLabel } from "@/components/meta/origin-label";
+import { TileRatings } from "@/components/meta/tile-ratings";
 import { MoviePreviewActions } from "@/components/preview/movie-preview-actions";
 
 interface MovieCardProps {
@@ -17,13 +20,13 @@ interface MovieCardProps {
 export function MovieCard({ movie }: MovieCardProps) {
   const posterUrl = getPosterUrl(movie.poster_path, "w342");
   const year = movie.release_date?.split("-")[0] ?? "";
+  const meta = useTitleMeta("movie", movie.id);
 
   return (
     <PreviewTile
       kind="movie"
       id={movie.id}
       title={movie.title}
-      voteAverage={movie.vote_average}
       year={year}
       actions={() => <MoviePreviewActions movie={movie} />}
     >
@@ -48,6 +51,7 @@ export function MovieCard({ movie }: MovieCardProps) {
                   <Film className="size-10 text-muted-foreground" />
                 </div>
               )}
+              <OriginLabel meta={meta} className="absolute top-2 left-2" />
             </div>
 
             {/* Info */}
@@ -55,11 +59,8 @@ export function MovieCard({ movie }: MovieCardProps) {
               <h3 className="truncate text-sm font-medium text-foreground">
                 {movie.title}
               </h3>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-0.5 text-cinema-gold">
-                  <Star className="size-3 fill-cinema-gold" />
-                  {movie.vote_average.toFixed(1)}
-                </span>
+              <div className="flex h-4 items-center gap-2 text-xs text-muted-foreground">
+                <TileRatings meta={meta} />
                 {year && <span>{year}</span>}
               </div>
             </div>

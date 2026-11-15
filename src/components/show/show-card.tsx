@@ -2,23 +2,26 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Film, Star } from "lucide-react";
+import { Film } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { Show } from "@/lib/tmdb";
 import { getPosterUrl } from "@/lib/tmdb";
 import { PreviewTile } from "@/components/preview/preview-tile";
+import { useTitleMeta } from "@/hooks/use-title-meta";
+import { OriginLabel } from "@/components/meta/origin-label";
+import { TileRatings } from "@/components/meta/tile-ratings";
 import { ShowPreviewActions } from "@/components/preview/show-preview-actions";
 
 export function ShowCard({ show }: { show: Show }) {
   const posterUrl = getPosterUrl(show.poster_path, "w342");
   const year = show.first_air_date?.slice(0, 4) ?? "";
+  const meta = useTitleMeta("show", show.id);
 
   return (
     <PreviewTile
       kind="tv"
       id={show.id}
       title={show.name}
-      voteAverage={show.vote_average}
       year={year}
       actions={(data) => <ShowPreviewActions showId={show.id} data={data} />}
     >
@@ -39,17 +42,15 @@ export function ShowCard({ show }: { show: Show }) {
                   <Film className="size-10 text-muted-foreground" />
                 </div>
               )}
+              <OriginLabel meta={meta} className="absolute top-2 left-2" />
             </div>
 
             <div className="flex flex-col gap-1 p-3">
               <h3 className="truncate text-sm font-medium text-foreground">
                 {show.name}
               </h3>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-0.5 text-cinema-gold">
-                  <Star className="size-3 fill-cinema-gold" />
-                  {show.vote_average.toFixed(1)}
-                </span>
+              <div className="flex h-4 items-center gap-2 text-xs text-muted-foreground">
+                <TileRatings meta={meta} />
                 {year && <span>{year}</span>}
               </div>
             </div>

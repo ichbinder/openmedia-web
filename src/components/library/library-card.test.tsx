@@ -16,6 +16,8 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+const mockMeta = vi.hoisted(() => vi.fn(() => null));
+vi.mock("@/hooks/use-title-meta", () => ({ useTitleMeta: mockMeta }));
 vi.mock("@/lib/auth", () => ({ getToken: vi.fn(() => "t") }));
 
 afterEach(cleanup);
@@ -74,6 +76,11 @@ describe("LibraryCard", () => {
     expect(hrefs).toContain("/serie/95396");
     expect(hrefs).toContain("/serie/95396#S02E05");
     expect(libraryItemLink(episodeItem)).toBe("/serie/95396");
+  });
+
+  it("asks for show meta with the show id for an episode", () => {
+    render(<LibraryCard item={episodeItem} onRemove={() => {}} />);
+    expect(mockMeta).toHaveBeenCalledWith("show", 95396);
   });
 
   it("shows a film as before", () => {
