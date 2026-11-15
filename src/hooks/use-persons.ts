@@ -6,6 +6,10 @@ import { getToken } from "@/lib/auth";
 
 let cache: { token: string; persons: Promise<Person[]> } | null = null;
 
+export function clearPersonsCache() {
+  cache = null;
+}
+
 function loadPersons(token: string): Promise<Person[]> {
   if (cache?.token !== token) {
     const persons = getTaste(token)

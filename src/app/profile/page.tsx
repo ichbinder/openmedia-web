@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
-import { User, Key, Settings, Server } from "lucide-react";
+import { User, Key, Settings, Server, Heart } from "lucide-react";
 import { ApiTokenManager } from "@/components/profile/api-tokens";
 import { JellyfinPluginSetup } from "@/components/profile/jellyfin-plugin-setup";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -50,6 +50,25 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+
+        {/* Taste */}
+        <div className="mt-8">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Heart className="size-5" />
+            Geschmack
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Erzähl uns, was ihr gern schaut, und importiere deine Bewertungen von Trakt.
+          </p>
+          <div className="mt-4">
+            <Link
+              href="/geschmack"
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Geschmack einstellen
+            </Link>
+          </div>
+        </div>
 
         {/* Jellyfin Plugin Setup */}
         <div className="mt-8">

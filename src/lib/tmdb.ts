@@ -157,7 +157,7 @@ export class TmdbError extends Error {
   }
 }
 
-async function tmdbFetch<T>(
+export async function tmdbFetch<T>(
   endpoint: string,
   params: Record<string, string> | undefined,
   revalidate: number,
