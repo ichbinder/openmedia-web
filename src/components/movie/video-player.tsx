@@ -16,16 +16,19 @@ import { X } from "lucide-react";
 
 import { NextEpisodeOverlay } from "@/components/player/next-episode-overlay";
 import { ResumePrompt } from "@/components/player/resume-prompt";
+import { RatingPanel } from "@/components/rating/rating-panel";
+import { usePersons } from "@/hooks/use-persons";
 import { getToken } from "@/lib/auth";
 import { useDownloads } from "@/contexts/download-context";
 import {
   getNextEpisode,
   reportProgress,
   requestEpisodes,
-  type NextEpisode,
+  type PlaybackInfo,
   type Resume,
 } from "@/lib/backend";
 import { nextEpisodePhase, shouldAskResume } from "@/lib/progress";
+import { shouldAskRating } from "@/lib/rating";
 import { createProgressReporter, type ProgressBody } from "@/lib/progress-reporter";
 
 import "@vidstack/react/player/styles/default/theme.css";
@@ -94,7 +97,11 @@ export function VideoPlayer({
   });
   const { nzbFileId, src, title } = current;
   const [chained, setChained] = useState(false);
-  const [next, setNext] = useState<NextEpisode | null>(null);
+  const [info, setInfo] = useState<PlaybackInfo | null>(null);
+  const next = info?.next ?? null;
+  const [ratingPrompt, setRatingPrompt] = useState<"none" | "open" | "closing" | "done">("none");
+  const ratingVisible = ratingPrompt === "open" || ratingPrompt === "closing";
+  const persons = usePersons();
   const [remainingSec, setRemainingSec] = useState(Infinity);
   const [ended, setEnded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -127,7 +134,7 @@ export function VideoPlayer({
     let cancelled = false;
     getNextEpisode(nzbFileId, token)
       .then((res) => {
-        if (!cancelled && res.ok) setNext(res.data?.next ?? null);
+        if (!cancelled && res.ok) setInfo(res.data);
       })
       .catch(() => {});
     return () => {
@@ -150,7 +157,8 @@ export function VideoPlayer({
     }
     if (!stream) return false;
     pendingSeek.current = undefined;
-    setNext(null);
+    setInfo(null);
+    setRatingPrompt("none");
     setRemainingSec(Infinity);
     setEnded(false);
     setDismissed(false);
@@ -189,6 +197,30 @@ export function VideoPlayer({
     return playerRef.current?.state.duration ?? NaN;
   }
 
+  function askRating(ended: boolean): boolean {
+    if (ratingPrompt !== "none" || !info) return false;
+    return shouldAskRating({
+      ...info,
+      positionSec: playerRef.current?.currentTime ?? 0,
+      durationSec: currentDuration(),
+      ended,
+    });
+  }
+
+  function close() {
+    if (!askRating(false)) {
+      onClose();
+      return;
+    }
+    void playerRef.current?.pause();
+    setRatingPrompt("closing");
+  }
+
+  function finishRating() {
+    setRatingPrompt("done");
+    if (ratingPrompt === "closing") onClose();
+  }
+
   function startPlayback(from?: number) {
     const player = playerRef.current;
     setAsking(false);
@@ -198,19 +230,21 @@ export function VideoPlayer({
     void player.play();
   }
 
+  const latestClose = useRef(close);
+  useEffect(() => {
+    latestClose.current = close;
+  });
+
   // Close on ESC key
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        // Only close if not in fullscreen — let the player handle ESC in fullscreen
-        const isFullscreen = playerRef.current?.state.fullscreen;
-        if (!isFullscreen) {
-          onClose();
-        }
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      // Only close if not in fullscreen — let the player handle ESC in fullscreen
+      const isFullscreen = playerRef.current?.state.fullscreen;
+      if (!isFullscreen) {
+        latestClose.current();
       }
-    },
-    [onClose],
-  );
+    }
+  }, []);
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
@@ -234,7 +268,7 @@ export function VideoPlayer({
     <div className="group relative w-full bg-black">
       {/* Close button — top-right corner */}
       <button
-        onClick={onClose}
+        onClick={close}
         className="absolute right-3 top-3 z-50 rounded-full bg-black/60 p-2 text-white/80 transition-colors hover:bg-black/80 hover:text-white"
         aria-label="Player schließen"
       >
@@ -258,6 +292,7 @@ export function VideoPlayer({
         onEnded={() => {
           reporter.ended(playerRef.current?.currentTime ?? 0, currentDuration());
           setEnded(true);
+          if (askRating(true)) setRatingPrompt("open");
         }}
         playsInline
         crossOrigin=""
@@ -279,7 +314,7 @@ export function VideoPlayer({
           // Disable download button in the player — user has the existing download button
           download={false}
         />
-        {next && !dismissed && (
+        {next && !dismissed && !ratingVisible && (
           <NextEpisodeOverlay
             phase={nextEpisodePhase(remainingSec, ended, next)}
             next={next}
@@ -287,6 +322,23 @@ export function VideoPlayer({
             onCancel={() => setDismissed(true)}
             onDownload={downloadNext}
           />
+        )}
+        {info?.title && ratingVisible && (
+          <div
+            role="dialog"
+            aria-label="Bewertung"
+            className="fixed inset-0 z-[60] flex overflow-y-auto bg-black/80 p-4 md:absolute md:z-40 md:bg-black/60"
+          >
+            <div className="m-auto w-full max-w-md">
+              <RatingPanel
+                title={info.title}
+                initial={info.rating}
+                persons={persons}
+                mode="prompt"
+                onDone={finishRating}
+              />
+            </div>
+          </div>
         )}
         {asking && resume && (
           <ResumePrompt

@@ -7,6 +7,7 @@ import { CastList } from "@/components/movie/cast-list";
 import { TrailerSection } from "@/components/movie/trailer-section";
 import { SeasonList } from "@/components/show/season-list";
 import { ShowGrid } from "@/components/show/show-grid";
+import { RateButton } from "@/components/rating/rate-button";
 import { AlertTriangle } from "lucide-react";
 
 interface ShowPageProps {
@@ -78,6 +79,9 @@ export default async function ShowDetailPage({ params }: ShowPageProps) {
           overview: show.overview,
         }}
       />
+      <div className="mx-auto flex max-w-6xl flex-wrap items-start gap-3 px-4 py-4 md:px-6 lg:px-8">
+        <RateButton kind="show" tmdbId={showId} name={show.name} />
+      </div>
       <SeasonList showId={showId} seasons={seasons} />
       <CastList cast={show.credits.cast} />
       <TrailerSection videos={show.videos.results} />

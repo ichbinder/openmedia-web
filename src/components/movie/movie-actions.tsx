@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { WatchlistButton } from "@/components/movie/watchlist-button";
 import { ProvisionButton } from "@/components/movie/download-button";
 import { PrecacheButton } from "@/components/movie/precache-button";
+import { RateButton } from "@/components/rating/rate-button";
 import { getNzbMovieByTmdb } from "@/lib/backend";
 import { getToken } from "@/lib/auth";
 
@@ -45,6 +46,7 @@ export function MovieActions({ movie }: MovieActionsProps) {
   return (
     <div className="mx-auto flex max-w-6xl flex-wrap items-start gap-3 px-4 py-4 md:px-6 lg:px-8">
       <WatchlistButton movie={movie} variant="detail" />
+      <RateButton kind="movie" tmdbId={movie.id} name={movie.title} />
       <ProvisionButton movie={movie} />
       {precacheHash && <PrecacheButton movieHash={precacheHash} />}
     </div>

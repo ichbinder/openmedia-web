@@ -3,12 +3,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Person, RatingView } from "@/lib/backend";
 import { RatingPanel } from "./rating-panel";
 
-vi.mock("@/lib/auth", () => ({ getToken: () => "tok" }));
+vi.mock("@/lib/auth", () => ({ getToken: vi.fn(() => "tok") }));
 vi.mock("@/lib/backend", () => ({
   putRating: vi.fn(),
   deleteRating: vi.fn(),
 }));
 import { deleteRating, putRating } from "@/lib/backend";
+import { getToken } from "@/lib/auth";
 
 const title = { kind: "movie" as const, tmdbId: 7, name: "Heat" };
 const anna: Person = { id: "a", name: "Anna", limits: [], limitsText: "" };
@@ -66,5 +67,15 @@ describe("RatingPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Bewertung löschen" }));
     await waitFor(() => expect(onDone).toHaveBeenCalledWith(null));
     expect(deleteRating).toHaveBeenCalledWith("movie", 7, "tok");
+  });
+
+  it("shows the error without a token", () => {
+    vi.mocked(getToken).mockReturnValueOnce(null);
+    const onDone = vi.fn();
+    render(<RatingPanel title={title} initial={null} persons={[]} mode="prompt" onDone={onDone} />);
+    fireEvent.click(screen.getByRole("button", { name: /Super/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Fertig" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Das hat leider nicht geklappt.");
+    expect(onDone).not.toHaveBeenCalled();
   });
 });

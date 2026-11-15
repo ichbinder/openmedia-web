@@ -7,6 +7,8 @@ import { getToken } from "@/lib/auth";
 import { TAGS, VERDICTS } from "@/lib/rating";
 import { cn } from "@/lib/utils";
 
+const FAILED = "Das hat leider nicht geklappt.";
+
 interface RatingPanelProps {
   title: RatingTitle;
   initial: RatingView | null;
@@ -44,13 +46,16 @@ export function RatingPanel({ title, initial, persons, mode, onDone }: RatingPan
 
   async function run(action: (token: string) => Promise<RatingView | null>) {
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+      setError(FAILED);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       onDone(await action(token));
     } catch {
-      setError("Das hat leider nicht geklappt.");
+      setError(FAILED);
       setBusy(false);
     }
   }
