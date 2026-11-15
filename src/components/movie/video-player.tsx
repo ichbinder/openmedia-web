@@ -101,11 +101,12 @@ export function VideoPlayer({
     };
   }, [reporter]);
 
-  const startAtApplied = useRef(false);
-  function handleCanPlay() {
-    if (startAt === undefined || startAtApplied.current || !playerRef.current) return;
-    startAtApplied.current = true;
-    playerRef.current.currentTime = startAt;
+  const pendingSeek = useRef<number | undefined>(startAt);
+  function applyPendingSeek() {
+    const player = playerRef.current;
+    if (pendingSeek.current === undefined || !player?.state.canPlay) return;
+    player.currentTime = pendingSeek.current;
+    pendingSeek.current = undefined;
   }
 
   function currentDuration() {
@@ -116,7 +117,8 @@ export function VideoPlayer({
     const player = playerRef.current;
     setAsking(false);
     if (!player) return;
-    if (from !== undefined) player.currentTime = from;
+    pendingSeek.current = from;
+    applyPendingSeek();
     void player.play();
   }
 
@@ -168,7 +170,7 @@ export function VideoPlayer({
         src={{ src, type: getMimeType(src) }}
         title={title}
         autoPlay={autoPlay && !asking}
-        onCanPlay={handleCanPlay}
+        onCanPlay={applyPendingSeek}
         onTimeUpdate={({ currentTime }) =>
           reporter.tick(currentTime, currentDuration(), !playerRef.current?.state.paused)
         }

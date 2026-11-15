@@ -47,6 +47,21 @@ describe("createProgressReporter", () => {
     expect(send).toHaveBeenCalledWith({ nzbFileId: "f1", positionSec: 12, durationSec: 6000 }, true);
   });
 
+  it("meldet keine Stelle, die nie gespielt wurde", () => {
+    const reporter = createProgressReporter(send, "f1");
+    reporter.tick(0, 6000, false);
+    reporter.flush(true);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("flush sendet nur einmal pro Änderung", () => {
+    const reporter = createProgressReporter(send, "f1");
+    reporter.tick(5, 6000, true);
+    reporter.flush(true);
+    reporter.flush(true);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it("meldet nie ohne bekannte Länge", () => {
     const reporter = createProgressReporter(send, "f1");
     vi.advanceTimersByTime(60000);

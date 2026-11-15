@@ -120,6 +120,7 @@ export function MovieHeroWithPlayer({
       <section className="relative w-full">
         <div className="relative w-full md:mx-auto md:max-w-6xl md:px-6 lg:px-8">
           <VideoPlayer
+            key={stream.nzbFileId}
             src={stream.url}
             nzbFileId={stream.nzbFileId}
             resume={stream.resume}

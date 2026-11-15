@@ -445,6 +445,7 @@ export function SeasonList({ showId, seasons }: SeasonListProps) {
                         {playing?.code === code && (
                           <div className="mt-3">
                             <VideoPlayer
+                              key={playing.nzbFileId}
                               src={playing.url}
                               nzbFileId={playing.nzbFileId}
                               resume={playing.resume}

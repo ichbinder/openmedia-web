@@ -302,7 +302,7 @@ export interface DownloadLink {
   url: string;
   expiresIn: number;
   expiresAt: string;
-  resume: Resume | null;
+  resume?: Resume | null;
 }
 
 export async function getDownloadLink(nzbFileId: string, token: string, expires = "7d") {
