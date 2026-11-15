@@ -43,6 +43,7 @@ function hasData(meta: TitleMeta | null) {
 }
 
 export function loadTitleMeta(kind: Kind, tmdbId: number): Promise<TitleMeta | null> {
+  if (!Number.isInteger(tmdbId) || tmdbId <= 0) return Promise.resolve(null);
   const key = `${kind}:${tmdbId}`;
   const cached = cache.get(key);
   if (cached) return cached;

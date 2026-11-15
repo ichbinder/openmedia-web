@@ -37,6 +37,20 @@ describe("loadTitleMeta", () => {
     expect(metas.map((m) => m?.tmdbId)).toEqual([1, 2, 3]);
   });
 
+  it("never sends invalid ids and still serves valid siblings", async () => {
+    const results = Promise.all([
+      loadTitleMeta("movie", 0),
+      loadTitleMeta("movie", -4),
+      loadTitleMeta("movie", 1.5),
+      loadTitleMeta("movie", 5),
+    ]);
+    await vi.advanceTimersByTimeAsync(30);
+    const metas = await results;
+    expect(getTitleMeta).toHaveBeenCalledTimes(1);
+    expect(getTitleMeta.mock.calls[0][0]).toEqual([{ kind: "movie", tmdbId: 5 }]);
+    expect(metas.map((m) => m?.tmdbId ?? null)).toEqual([null, null, null, 5]);
+  });
+
   it("does not request the same id again", async () => {
     const first = loadTitleMeta("movie", 1);
     await vi.advanceTimersByTimeAsync(30);
