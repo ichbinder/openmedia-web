@@ -451,3 +451,41 @@ export async function addToSearchHistory(
 export async function clearSearchHistory(token: string) {
   return backendFetch("/search-history", { method: "DELETE", token });
 }
+
+export type Brand =
+  | "netflix"
+  | "prime"
+  | "disney"
+  | "apple"
+  | "hbo"
+  | "paramount"
+  | "sky"
+  | "cinema"
+  | "other";
+
+export interface Ratings {
+  critics?: number;
+  audience?: number;
+  imdb?: number;
+  metacritic?: number;
+  letterboxd?: number;
+  trakt?: number;
+  tmdb?: number;
+}
+
+export interface TitleMeta {
+  kind: "movie" | "show";
+  tmdbId: number;
+  label: string | null;
+  brand: Brand | null;
+  ratings: Ratings;
+  score: number | null;
+}
+
+export function getTitleMeta(items: { kind: "movie" | "show"; tmdbId: number }[], token: string) {
+  return backendFetch<{ items: TitleMeta[] }>("/meta", {
+    method: "POST",
+    body: JSON.stringify({ items }),
+    token,
+  });
+}
