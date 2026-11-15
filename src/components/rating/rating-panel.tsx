@@ -87,6 +87,7 @@ export function RatingPanel({ title, initial, persons, mode, onDone }: RatingPan
             key={v.key}
             type="button"
             aria-pressed={verdict === v.key}
+            autoFocus={mode === "prompt" && v.key === "up"}
             onClick={() => setVerdict(v.key)}
             className={cn(
               "flex flex-1 flex-col items-center rounded-lg border px-3 py-2 transition-colors",

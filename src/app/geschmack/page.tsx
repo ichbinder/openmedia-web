@@ -8,7 +8,7 @@ import { LimitsStep, type LimitEdit } from "@/components/taste/limits-step";
 import { PersonsStep, type PersonDraft } from "@/components/taste/persons-step";
 import { QuickRound } from "@/components/taste/quick-round";
 import { TraktStep } from "@/components/taste/trakt-step";
-import { getRatings, getTaste, putTaste, type Person, type TasteView } from "@/lib/backend";
+import { getRatings, getTaste, putTaste, type TasteBody, type TasteView } from "@/lib/backend";
 import { getToken } from "@/lib/auth";
 import { clearPersonsCache } from "@/hooks/use-persons";
 
@@ -25,12 +25,16 @@ function Section({ number, title, children }: { number: number; title: string; c
   );
 }
 
-function toBody(taste: TasteView, patch: Partial<Pick<TasteView, "persons" | "genres" | "likesText">>) {
-  const merged = { ...taste, ...patch };
+function toBody(taste: TasteView, patch: Partial<TasteBody>): TasteBody {
   return {
-    persons: merged.persons.map(({ id, name, limits, limitsText }) => ({ id, name, limits, limitsText })),
-    genres: merged.genres,
-    likesText: merged.likesText,
+    persons: (patch.persons ?? taste.persons).map(({ id, name, limits, limitsText }) => ({
+      ...(id ? { id } : {}),
+      name,
+      limits,
+      limitsText,
+    })),
+    genres: patch.genres ?? taste.genres,
+    likesText: patch.likesText ?? taste.likesText,
   };
 }
 
@@ -39,7 +43,7 @@ export default function GeschmackPage() {
   const [ratedKeys, setRatedKeys] = useState<string[]>([]);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     const token = getToken();
     if (!token) return;
     void Promise.all([getTaste(token), getRatings(token)])
@@ -51,8 +55,10 @@ export default function GeschmackPage() {
       .catch(() => setLoadFailed(true));
   }, []);
 
+  useEffect(load, [load]);
+
   const save = useCallback(
-    async (patch: Partial<Pick<TasteView, "persons" | "genres" | "likesText">>): Promise<string | null> => {
+    async (patch: Partial<TasteBody>): Promise<string | null> => {
       const token = getToken();
       if (!token || !taste) return SAVE_FAILED;
       try {
@@ -72,8 +78,8 @@ export default function GeschmackPage() {
 
   function savePersons(drafts: PersonDraft[]) {
     const existing = new Map(taste?.persons.map((p) => [p.id, p]));
-    const persons: Person[] = drafts.map((d) => ({
-      id: d.id ?? "",
+    const persons: TasteBody["persons"] = drafts.map((d) => ({
+      id: d.id,
       name: d.name,
       limits: (d.id && existing.get(d.id)?.limits) || [],
       limitsText: (d.id && existing.get(d.id)?.limitsText) || "",
@@ -110,7 +116,7 @@ export default function GeschmackPage() {
               <PersonsStep persons={taste.persons} onSave={savePersons} />
             </Section>
             <Section number={2} title="Trakt">
-              <TraktStep importedAt={taste.traktImportedAt} counts={taste.traktImportCounts} />
+              <TraktStep importedAt={taste.traktImportedAt} counts={taste.traktImportCounts} onImported={load} />
             </Section>
             <Section number={3} title="Geschmack">
               {taste.persons.length === 0 ? (

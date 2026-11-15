@@ -13,7 +13,8 @@ vi.mock("@/lib/backend", () => ({
   traktPoll: vi.fn(),
   putRating: vi.fn(),
 }));
-import { getRatings, getTaste, putTaste, type TasteView } from "@/lib/backend";
+import { getRatings, getTaste, putTaste, traktConnect, traktPoll, type TasteView } from "@/lib/backend";
+import { getQuizCandidates } from "@/app/actions/quiz";
 import GeschmackPage from "./page";
 
 const taste: TasteView = {
@@ -26,6 +27,7 @@ const taste: TasteView = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(getTaste).mockResolvedValue({ ok: true, status: 200, data: taste });
   vi.mocked(getRatings).mockResolvedValue({ ok: true, status: 200, data: { items: [] } });
   vi.mocked(putTaste).mockReset().mockImplementation(async (body) => ({
@@ -51,5 +53,47 @@ describe("GeschmackPage", () => {
     expect(vi.mocked(putTaste).mock.calls[1][0].persons).toEqual([
       { id: "a", name: "Anna K.", limits: ["horror"], limitsText: "" },
     ]);
+  });
+
+  it("sends a new person without an id", async () => {
+    render(<GeschmackPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Person hinzufügen" }));
+    fireEvent.change(screen.getByLabelText("Name 2"), { target: { value: "Ben" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Speichern" })[0]);
+    await waitFor(() => expect(putTaste).toHaveBeenCalledTimes(1));
+    const [kept, added] = vi.mocked(putTaste).mock.calls[0][0].persons;
+    expect(kept.id).toBe("a");
+    expect(added).toEqual({ name: "Ben", limits: [], limitsText: "" });
+    expect(added).not.toHaveProperty("id");
+  });
+
+  it("reloads ratings after a Trakt import so the quick round skips imported titles", async () => {
+    vi.mocked(traktConnect).mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { userCode: "CODE", verificationUrl: "https://trakt.tv/activate", expiresIn: 600, interval: 0 },
+    });
+    vi.mocked(traktPoll).mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { status: "done", counts: { rated: 1, seen: 0, skipped: 0 } },
+    });
+    vi.mocked(getQuizCandidates).mockResolvedValue([]);
+    render(<GeschmackPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Mit Trakt verbinden" }));
+    vi.mocked(getRatings).mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: {
+        items: [
+          { kind: "movie", tmdbId: 7, verdict: "up", tags: [], forWhom: null, source: "trakt", ratedAt: "2026-11-15T00:00:00.000Z" },
+        ],
+      },
+    });
+    await waitFor(() => expect(getTaste).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getRatings).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole("button", { name: "Schnell-Runde starten" }));
+    await waitFor(() => expect(getQuizCandidates).toHaveBeenCalledWith(["movie-7"]));
   });
 });

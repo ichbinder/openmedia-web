@@ -8,6 +8,7 @@ import { getToken } from "@/lib/auth";
 interface TraktStepProps {
   importedAt: string | null;
   counts: TraktCounts | null;
+  onImported?: () => void;
 }
 
 interface Pairing {
@@ -26,7 +27,7 @@ export function countsText({ rated, seen, skipped }: TraktCounts): string {
   return `${rated + seen} Titel übernommen (${rated} bewertet, ${seen} gesehen, ${skipped} übersprungen)`;
 }
 
-export function TraktStep({ importedAt, counts }: TraktStepProps) {
+export function TraktStep({ importedAt, counts, onImported }: TraktStepProps) {
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [result, setResult] = useState({ importedAt, counts });
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export function TraktStep({ importedAt, counts }: TraktStepProps) {
     } else if (data.status === "done") {
       setPairing(null);
       setResult({ importedAt: new Date().toISOString(), counts: data.counts });
+      onImported?.();
     } else {
       fail(POLL_MESSAGES[data.status]);
     }

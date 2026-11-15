@@ -99,8 +99,8 @@ export function VideoPlayer({
   const [chained, setChained] = useState(false);
   const [info, setInfo] = useState<PlaybackInfo | null>(null);
   const next = info?.next ?? null;
-  const [ratingPrompt, setRatingPrompt] = useState<"none" | "open" | "closing" | "done">("none");
-  const ratingVisible = ratingPrompt === "open" || ratingPrompt === "closing";
+  const [ratingPrompt, setRatingPrompt] = useState<"none" | "open" | "closing" | "beforeNext" | "done">("none");
+  const ratingVisible = ratingPrompt === "open" || ratingPrompt === "closing" || ratingPrompt === "beforeNext";
   const persons = usePersons();
   const [remainingSec, setRemainingSec] = useState(Infinity);
   const [ended, setEnded] = useState(false);
@@ -216,9 +216,17 @@ export function VideoPlayer({
     setRatingPrompt("closing");
   }
 
+  async function requestNext(): Promise<boolean> {
+    if (!askRating(false)) return playNext();
+    void playerRef.current?.pause();
+    setRatingPrompt("beforeNext");
+    return true;
+  }
+
   function finishRating() {
     setRatingPrompt("done");
     if (ratingPrompt === "closing") onClose();
+    if (ratingPrompt === "beforeNext") void playNext();
   }
 
   function startPlayback(from?: number) {
@@ -318,7 +326,7 @@ export function VideoPlayer({
           <NextEpisodeOverlay
             phase={nextEpisodePhase(remainingSec, ended, next)}
             next={next}
-            onPlayNext={playNext}
+            onPlayNext={requestNext}
             onCancel={() => setDismissed(true)}
             onDownload={downloadNext}
           />
@@ -326,6 +334,7 @@ export function VideoPlayer({
         {info?.title && ratingVisible && (
           <div
             role="dialog"
+            aria-modal="true"
             aria-label="Bewertung"
             className="fixed inset-0 z-[60] flex overflow-y-auto bg-black/80 p-4 md:absolute md:z-40 md:bg-black/60"
           >
