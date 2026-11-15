@@ -50,8 +50,8 @@ export function ShowCard({ show }: { show: Show }) {
                 {show.name}
               </h3>
               <div className="flex h-4 items-center gap-2 text-xs text-muted-foreground">
-                <TileRatings meta={meta} />
                 {year && <span>{year}</span>}
+                <TileRatings meta={meta} />
               </div>
             </div>
           </Card>

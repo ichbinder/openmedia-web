@@ -134,8 +134,8 @@ export function LibraryCard({
           </p>
         )}
         <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-          <TileRatings meta={meta} />
           {title?.year && <span>{title.year}</span>}
+          <TileRatings meta={meta} />
           {(item.nzbFile.qualityTier || item.nzbFile.resolution) && (
             <span className="rounded bg-muted px-1.5 py-0.5">
               {item.nzbFile.qualityTier || item.nzbFile.resolution}

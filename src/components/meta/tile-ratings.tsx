@@ -8,7 +8,7 @@ export function TileRatings({ meta }: { meta: TitleMeta | null }) {
   ].filter((p) => p !== false);
   if (parts.length === 0) return null;
   return (
-    <span role="img" aria-label={parts.map((p) => p.spoken).join(", ")}>
+    <span className="min-w-0 truncate" role="img" aria-label={parts.map((p) => p.spoken).join(", ")}>
       {parts.map((p) => p.text).join(" · ")}
     </span>
   );

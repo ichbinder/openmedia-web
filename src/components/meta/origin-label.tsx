@@ -10,7 +10,7 @@ const BRAND_CLASSES: Record<Brand, string> = {
   paramount: "bg-blue-600 text-white",
   sky: "bg-cyan-700 text-white",
   cinema: "bg-cinema-gold text-cinema-gold-foreground",
-  other: "bg-muted text-muted-foreground",
+  other: "bg-neutral-600 text-white",
 };
 
 export function OriginLabel({ meta, className }: { meta: TitleMeta | null; className?: string }) {
